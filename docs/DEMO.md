@@ -1,6 +1,6 @@
 # Demo script
 
-Three acts, about three minutes. The order is the argument: each act answers the
+Four acts, about three and a half minutes. The order is the argument: each act answers the
 question the previous one raises.
 
 ## Before you record
@@ -72,7 +72,50 @@ repo. Only the transport is swapped. Those are the shipped code's decisions."
 
 ---
 
-## Act 3 — on chain (50 seconds)
+## Act 3 — a real Lucid agent, running (60 seconds)
+
+This is the strongest thirty seconds in the demo. Do not skip it.
+
+```
+KH_API_KEY=kh_… npm run agent
+curl localhost:3000/.well-known/agent-card.json
+```
+
+**What to say:** "That's not my server pretending to be Lucid. That's
+`@lucid-agents/core`, `/http` and `/hono` off npm, serving Lucid's agent card and
+Lucid's entrypoint."
+
+Now show their validation rejecting a bad key, **before** any of my code runs:
+
+```
+curl -X POST localhost:3000/entrypoints/summarize/invoke \
+  -H 'Idempotency-Key: short' -d '{"text":"hi"}'
+
+{"error":{"code":"invalid_idempotency_key",
+          "message":"Idempotency-Key must contain 20 to 256 characters"}}
+```
+
+**The line that lands:** "That error is Lucid's, not mine. Their runtime enforces
+the identifier — I just make it mean something on chain."
+
+Then the real one:
+
+```
+curl -X POST localhost:3000/entrypoints/summarize/invoke \
+  -H 'Idempotency-Key: pay_lucid0917settle01' \
+  -d '{"text":"KeeperHub settles what Lucid admits."}'
+```
+
+Point at the `settlement` block in the response, and at `payment.reference` —
+Lucid's own settlement record, now carrying an onchain transaction hash. Their
+types call that field *"a verified payment channel or session reference."*
+
+Run the identical curl **again** with the same key. Same transaction hash,
+`replayed: true`, and nothing new on chain.
+
+---
+
+## Act 4 — on chain (50 seconds)
 
 Open BaseScan. Point at the transaction, then at the two facts:
 
@@ -115,6 +158,11 @@ identifier exists to prevent.
 KeeperHub distinguishes an execution it believes succeeded from one whose
 receipt it reconciled against the chain. Fulfilling an entrypoint can't be
 undone, so it takes the stronger signal.
+
+**"Is that really Lucid, or your own server?"**
+Their packages from npm, their agent card, their entrypoint router, their
+`Idempotency-Key` validation. The only thing that is mine is the handler and the
+settler it calls.
 
 **"Is this merged into Lucid?"**
 No. It consumes their public seam and imports nothing private, so it could
