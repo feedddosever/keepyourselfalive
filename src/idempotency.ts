@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { canonicalHash } from "./hash.js";
 import type { SettlementPlan } from "./types.js";
 
 /**
@@ -12,7 +12,7 @@ import type { SettlementPlan } from "./types.js";
  * Deliberately included: the epoch id, so two epochs that happen to net to the
  * same payouts stay distinct and both get paid.
  */
-export function canonicalize(plan: SettlementPlan): string {
+export function canonicalLines(plan: SettlementPlan): string[] {
   const lines = [
     "netted-tips/v1",
     `epoch:${plan.epochId}`,
@@ -23,9 +23,13 @@ export function canonicalize(plan: SettlementPlan): string {
   for (const payout of [...plan.payouts].sort((a, b) => (a.recipient < b.recipient ? -1 : 1))) {
     lines.push(`payout:${payout.recipient}:${payout.amount.toString(10)}`);
   }
-  return lines.join("\n");
+  return lines;
+}
+
+export function canonicalize(plan: SettlementPlan): string {
+  return canonicalLines(plan).join("\n");
 }
 
 export function idempotencyKey(plan: SettlementPlan): string {
-  return createHash("sha256").update(canonicalize(plan), "utf8").digest("hex");
+  return canonicalHash(canonicalLines(plan));
 }

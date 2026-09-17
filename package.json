@@ -1,9 +1,9 @@
 {
-  "name": "netted-tips",
+  "name": "nonce-firewall",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Nets Farcaster tip obligations into one batched settlement transaction, executed through KeeperHub.",
+  "description": "Serializes competing intents on a shared treasury key so concurrent agents cannot collide, replace, or strand each other's transactions.",
   "engines": {
     "node": ">=22"
   },
@@ -14,7 +14,8 @@
     "settle": "tsx src/cli.ts settle",
     "compile": "node scripts/compile.mjs",
     "deploy": "node scripts/deploy.mjs",
-    "plan": "tsx src/cli.ts plan"
+    "plan": "tsx src/cli.ts plan",
+    "demo": "tsx src/firewall/demo.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
