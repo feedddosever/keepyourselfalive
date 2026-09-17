@@ -17,7 +17,8 @@
     "plan": "tsx src/cli.ts plan",
     "demo": "tsx src/firewall/demo.ts",
     "prerender": "tsc -p tsconfig.build.json && node scripts/prerender.mjs",
-    "vercel-build": "npm run prerender"
+    "vercel-build": "npm run prerender",
+    "execute": "tsx src/firewall/execute.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

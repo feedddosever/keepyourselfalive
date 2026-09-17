@@ -22,6 +22,9 @@ export function buildContractCallBody(call: SettlementCall): Record<string, stri
     function_name: call.functionName,
     function_args: JSON.stringify(call.args),
     abi: JSON.stringify(call.abi),
+    // Sent verbatim: the API takes ether units as a string, and re-formatting it
+    // here (0.1 as 0.10) is the documented way to break the idempotency binding.
+    ...(call.value === undefined ? {} : { value: call.value }),
   };
 }
 

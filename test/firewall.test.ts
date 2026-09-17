@@ -253,6 +253,39 @@ describe("supersession", () => {
   });
 });
 
+describe("value-bearing intents", () => {
+  const deposit = (id: string, value: string, writes: string[], submitter = "agent-a") => {
+    const base = intent({ id, submitter, writes });
+    return { ...base, call: { ...base.call, args: [], value } };
+  };
+
+  it("keeps two independent deposits when they name different resources", () => {
+    const firewall = build();
+    expect(firewall.submit(deposit("deposit-1", "0.1", ["weth#1"])).decision).toBe("queued");
+    expect(firewall.submit(deposit("deposit-2", "0.2", ["weth#2"])).decision).toBe("queued");
+  });
+
+  it("supersedes the earlier deposit when both name the same resource", () => {
+    // Naming one resource twice means "replace", which is the point of the rule —
+    // independent work has to name independent resources.
+    const firewall = build();
+    firewall.submit(deposit("deposit-1", "0.1", ["weth"]));
+    expect(firewall.submit(deposit("deposit-2", "0.2", ["weth"])).decision).toBe("superseded");
+  });
+
+  it("serializes same-resource deposits from different submitters", () => {
+    const firewall = build();
+    firewall.submit(deposit("deposit-1", "0.1", ["weth"], "agent-a"));
+    expect(firewall.submit(deposit("deposit-2", "0.2", ["weth"], "agent-b")).decision).toBe("queued");
+  });
+
+  it("treats two deposits of the same amount as one intent", () => {
+    const firewall = build();
+    firewall.submit(deposit("deposit-1", "0.1", ["weth#1"]));
+    expect(firewall.submit(deposit("deposit-2", "0.1", ["weth#2"])).decision).toBe("duplicate");
+  });
+});
+
 describe("quarantine", () => {
   it("quarantines a lane whose execution stays pending too long", async () => {
     const firewall = build({ stuckAfterMs: 60_000 });

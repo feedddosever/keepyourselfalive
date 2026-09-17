@@ -239,5 +239,6 @@ function toCall(intent: Intent): SettlementCall {
     functionName: intent.call.functionName,
     args: intent.call.args,
     abi: intent.call.abi,
+    ...(intent.call.value === undefined ? {} : { value: intent.call.value }),
   };
 }

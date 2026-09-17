@@ -60,9 +60,25 @@ stops a retried admission rebroadcasting.
 
 ```
 npm install
-npm test          # 59 tests
+npm test          # 82 tests
 npm run demo      # no API key needed
 ```
+
+## Execute for real
+
+```
+KH_API_KEY=kh_…  SENDER_ADDRESS=0x…  npm run execute
+```
+
+Submits `EXECUTE_COUNT` intents (default 2) at once against one sender key and
+drives them to completion through the live MCP adapter. Without the firewall they
+would be assigned the same nonce and all but one would be lost; with it they land
+as consecutive transactions on consecutive nonces, and the run prints an explorer
+link for each.
+
+Defaults to WETH `deposit()` on Base Sepolia, which needs only native test ETH.
+`CHAIN_ID`, `TARGET_ADDRESS`, `EXECUTE_VALUE`, `GAS_CEILING` and `LEDGER_PATH`
+override it.
 
 The demo puts six agents on one key and walks through every rule above:
 
@@ -109,13 +125,18 @@ harness. `src/netting.ts`, `src/settle.ts` and `contracts/TipDisperser.sol`.
 | Collision demonstration in a real EVM | Done, 3 tests |
 | Lane exclusivity, ordering, durability | Done, 18 tests |
 | Netting, idempotency, ledger, disperser | Done, 38 tests |
+| Live execution path (`npm run execute`) | Done — awaiting a funded wallet |
 | REST adapter (`@keeperhub/sdk`) | Done — degraded preflight, see `docs/FRICTION.md` |
-| MCP adapter (`@keeperhub/mcp`) | Done — **argument keys unverified** |
+| MCP adapter (`@keeperhub/mcp`) | Done — reconciled against the live tool schema |
 | First Base Sepolia transaction | **Not done — needs a `kh_` key and a funded sender** |
 
-Two standing caveats, both in `docs/FRICTION.md`: `@keeperhub/sdk@0.1.1` exposes
-neither `simulate` nor an idempotency key, so the REST adapter substitutes a
-local `eth_call` preflight and reports `idempotencyEnforcedRemotely: false`
-rather than implying a guarantee it lacks; and the MCP adapter's argument keys
-are reconstructed, because `@keeperhub/mcp` ships no schemas and `tools/list`
-needs a key. Confirm them with one `tools/list` before trusting it with money.
+One standing caveat, and one open blocker. The caveat: `@keeperhub/sdk@0.1.1`
+exposes neither `simulate` nor an idempotency key, so the REST adapter
+substitutes a local `eth_call` preflight, reports `via: "local-eth-call"`, and
+sets `idempotencyEnforcedRemotely: false` rather than implying a guarantee it
+lacks. Prefer the MCP adapter. The blocker: the organization wallet
+`0xE4a475d134bB72ff8045eA4E4c762174408311a8` holds 0.0 on Base Sepolia and
+Ethereum Sepolia, so nothing can be broadcast until it is funded.
+
+`docs/FRICTION.md` covers both, plus three behaviours that only surfaced once the
+live MCP schema was available.

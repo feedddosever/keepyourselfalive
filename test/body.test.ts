@@ -58,6 +58,15 @@ describe("contract call body", () => {
     expect(() => buildContractCallBody(call(["0xabc", 0.1]))).toThrow(/non-integer number/);
   });
 
+  it("passes a native value through verbatim", () => {
+    const body = buildContractCallBody({ ...call([]), value: "0.0000001" });
+    expect(body.value).toBe("0.0000001");
+  });
+
+  it("omits value entirely when there is none", () => {
+    expect(buildContractCallBody(call([]))).not.toHaveProperty("value");
+  });
+
   it("checks nested arguments, not just the top level", () => {
     expect(() => buildContractCallBody(call([["0xabc"], [1000n]]))).toThrow(/\[1\]\[0\]/);
   });

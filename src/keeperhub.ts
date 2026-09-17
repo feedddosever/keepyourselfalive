@@ -21,6 +21,8 @@ export interface SettlementCall {
   functionName: string;
   args: readonly unknown[];
   abi: readonly unknown[];
+  /** Native value in ether units, as a decimal string. Payable functions only. */
+  value?: string;
 }
 
 export interface SimulationResult {

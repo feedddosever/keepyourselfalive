@@ -6,6 +6,8 @@ export interface IntentCall {
   functionName: string;
   args: readonly unknown[];
   abi: readonly unknown[];
+  /** Native value in ether units, as a decimal string. Payable functions only. */
+  value?: string;
 }
 
 export interface Intent {
@@ -19,10 +21,19 @@ export interface Intent {
   call: IntentCall;
   /**
    * Resources this intent mutates, named by the submitter — e.g.
-   * `approve:0xtoken:0xspender` or `treasury:usdc`. Two intents naming the same
-   * resource may not be in flight together, and a newer one supersedes an older
-   * queued one, because executing a stale write after a fresh one produces an
-   * order-dependent result nobody reasoned about.
+   * `approve:0xtoken:0xspender` or `rebalance:pool-1`.
+   *
+   * This declares REPLACEMENT, not merely conflict. Within one submitter, a newer
+   * intent naming a resource *supersedes* the older queued intent naming it: the
+   * stale one is dropped, because executing a superseded write after the fresh one
+   * produces an order-dependent result nobody reasoned about. That is what you
+   * want for a rebalance or a price update, where only the latest is meaningful.
+   *
+   * So two intents that must BOTH execute have to name different resources, even
+   * when they touch the same contract. Two independent deposits are
+   * `weth:0x…#1` and `weth:0x…#2`, not `weth:0x…` twice. Across submitters the
+   * rule never applies — one agent can never drop another's work — so those
+   * simply serialize.
    */
   writes: readonly string[];
   /** Simulated gas above this is refused before broadcast, not after. */
@@ -52,6 +63,7 @@ export function intentHash(intent: Intent): string {
     `contract:${intent.call.contractAddress.toLowerCase()}`,
     `function:${intent.call.functionName}`,
     `args:${JSON.stringify(intent.call.args)}`,
+    `value:${intent.call.value ?? "0"}`,
   ]);
 }
 
