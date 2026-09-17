@@ -74,3 +74,27 @@ Establishing whether the sponsored path is exposed to nonce contention needs
 either the raw transaction nonces from an explorer or a word from KeeperHub
 about how sponsored sends are sequenced. Until then this project should not
 claim it.
+
+---
+
+## The Lucid Agents settlement
+
+A natively priced x402 offer settled through `src/lucid/settlement.ts`, keyed by
+a Lucid-format payment identifier.
+
+| | |
+|---|---|
+| Payment identifier / idempotency key | `pay_lucid0917settle01` |
+| Transaction | [`0x7d8d4849…36780359`](https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359) |
+| Value | 0.0000001 ETH → `0x000000000000000000000000000000000000bEEF` |
+| Receipt | `verified: true`, `receiptStatus: success`, block 46952279, gas 49,803 |
+
+Resent with the same identifier and an identical body:
+
+```json
+{ "executionId": "vvo8w7rcv76yxgb7slrsd", "idempotentReplay": true,
+  "transactionHash": "0x7d8d4849…36780359" }
+```
+
+Same execution, same hash, no second transfer — which is what a retrying x402
+buyer produces, and the reason the payment identifier is used as the key.

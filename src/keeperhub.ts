@@ -37,6 +37,8 @@ export interface ExecutionHandle {
   executionId: string;
   /** False when the transport could not carry the idempotency key to KeeperHub. */
   idempotencyEnforcedRemotely: boolean;
+  /** KeeperHub replayed a prior execution instead of broadcasting again. */
+  replayed?: boolean;
 }
 
 export interface ExecutionStatus {
@@ -45,12 +47,30 @@ export interface ExecutionStatus {
   txLink?: string;
   gasUsedWei?: string;
   error?: string;
+  /** KeeperHub reconciled the receipt against the chain. */
+  verified?: boolean;
+  blockNumber?: number;
+  receiptStatus?: string;
+}
+
+/**
+ * A native-currency transfer. Distinct from a contract call because KeeperHub
+ * exposes it as its own tool, and because its amount is in human-readable
+ * units ("0.1") rather than base units.
+ */
+export interface NativeTransfer {
+  chainId: number;
+  toAddress: string;
+  /** Ether units, verbatim. Never reformat it — see `adapters/body.ts`. */
+  amount: string;
 }
 
 export interface KeeperHubClient {
   simulate(call: SettlementCall): Promise<SimulationResult>;
   execute(call: SettlementCall, idempotencyKey: string): Promise<ExecutionHandle>;
   status(executionId: string): Promise<ExecutionStatus>;
+  simulateTransfer?(transfer: NativeTransfer): Promise<SimulationResult>;
+  executeTransfer?(transfer: NativeTransfer, idempotencyKey: string): Promise<ExecutionHandle>;
 }
 
 /** Guard rail independent of the transport: the call must match the plan it came from. */

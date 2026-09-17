@@ -1,4 +1,40 @@
-# nonce-firewall
+# lucid-agents × keeperhub
+
+**Lucid Agents settles on an HTTP response. This makes it settle on a verified
+onchain receipt — without generating a single new identifier.**
+
+[Lucid Agents](https://github.com/daydreamsai/lucid-agents) is Daydreams' machine
+commerce runtime: typed functions become paid x402 entrypoints. It admits a
+payment when the facilitator says the credential is good, and its own types hand
+the next step to somebody else — *"evaluate amount and endpoint policies before
+another rail attempts an irreversible settlement."*
+
+This is that rail.
+
+The join is an invariant Lucid already enforces: the x402 payment identifier must
+**equal** the HTTP `Idempotency-Key`. Pass it through as KeeperHub's
+`idempotency_key` and one identity spans the whole path — the value a buyer
+retries with is the value that decides whether a transfer is broadcast or
+replayed. A retrying buyer cannot be charged twice, and nothing had to be
+generated, correlated or stored to make that true.
+
+Proven on Base Sepolia: [`0x7d8d4849…36780359`](https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359)
+moved value under `pay_lucid0917settle01`, `verified: true`. Resent under the
+same identifier: `idempotentReplay: true`, same hash, no second transfer.
+
+**[docs/INTEGRATION.md](docs/INTEGRATION.md)** is the full account, including
+what is unfinished. **[docs/EXECUTIONS.md](docs/EXECUTIONS.md)** has every
+transaction. **[docs/DEMO.md](docs/DEMO.md)** is the demo script.
+
+```
+npm install
+npm test     # 94 tests
+npm run demo # the firewall, no API key needed
+```
+
+---
+
+# The nonce firewall underneath
 
 Two agents share a treasury key. Both build a transaction. Both are assigned the
 same nonce, because neither had landed when the other was built. One transaction

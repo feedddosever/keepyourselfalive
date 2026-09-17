@@ -4,6 +4,7 @@ import {
   type ExecutionHandle,
   type ExecutionStatus,
   type KeeperHubClient,
+  type NativeTransfer,
   type SettlementCall,
   type SimulationResult,
 } from "../keeperhub.js";
@@ -11,6 +12,7 @@ import { buildContractCallBody } from "./body.js";
 
 const TOOL = {
   executeContractCall: "execute_contract_call",
+  executeTransfer: "execute_transfer",
   getStatus: "get_direct_execution_status",
 } as const;
 
@@ -104,12 +106,12 @@ export class McpKeeperHubClient implements KeeperHubClient {
   }
 
   async execute(call: SettlementCall, idempotencyKey: string): Promise<ExecutionHandle> {
-    let response: { executionId?: string; execution_id?: string };
+    let response: { executionId?: string; execution_id?: string; idempotentReplay?: boolean };
     try {
       response = (await this.client.callTool(TOOL.executeContractCall, {
         ...buildContractCallBody(call),
         idempotency_key: idempotencyKey,
-      })) as { executionId?: string; execution_id?: string };
+      })) as { executionId?: string; execution_id?: string; idempotentReplay?: boolean };
     } catch (error) {
       const detail = parseError(error);
       if (detail.code === "idempotency_in_progress") throw new IdempotencyInProgressError(idempotencyKey);
@@ -121,7 +123,66 @@ export class McpKeeperHubClient implements KeeperHubClient {
 
     const executionId = response?.executionId ?? response?.execution_id;
     if (!executionId) throw new Error(`${TOOL.executeContractCall} returned no execution id`);
-    return { executionId, idempotencyEnforcedRemotely: true };
+    // KeeperHub sets idempotentReplay when it returned a prior execution rather
+    // than broadcasting. Surfacing it lets a caller tell "paid now" from
+    // "already paid", which a retrying buyer needs to hear.
+    return {
+      executionId,
+      idempotencyEnforcedRemotely: true,
+      replayed: response?.idempotentReplay === true,
+    };
+  }
+
+  async simulateTransfer(transfer: NativeTransfer): Promise<SimulationResult> {
+    try {
+      const response = (await this.client.callTool(TOOL.executeTransfer, {
+        ...transferBody(transfer),
+        simulate: true,
+      })) as { wouldRevert?: boolean; revertReason?: string; gasEstimate?: string };
+
+      return response?.wouldRevert
+        ? { ok: false, revertReason: response.revertReason ?? "would revert", via: "keeperhub" }
+        : {
+            ok: true,
+            via: "keeperhub",
+            ...(response?.gasEstimate ? { gasEstimate: response.gasEstimate } : {}),
+          };
+    } catch (error) {
+      const detail = parseError(error);
+      if (detail.wouldRevert || detail.code === "insufficient_balance" || detail.revertReason) {
+        return {
+          ok: false,
+          revertReason: detail.revertReason ?? detail.code ?? "transfer simulation failed",
+          via: "keeperhub",
+        };
+      }
+      throw error;
+    }
+  }
+
+  async executeTransfer(transfer: NativeTransfer, idempotencyKey: string): Promise<ExecutionHandle> {
+    let response: { executionId?: string; execution_id?: string; idempotentReplay?: boolean };
+    try {
+      response = (await this.client.callTool(TOOL.executeTransfer, {
+        ...transferBody(transfer),
+        idempotency_key: idempotencyKey,
+      })) as typeof response;
+    } catch (error) {
+      const detail = parseError(error);
+      if (detail.code === "idempotency_in_progress") throw new IdempotencyInProgressError(idempotencyKey);
+      if (detail.code === "idempotency_conflict") {
+        throw new IdempotencyConflictError(idempotencyKey, detail.revertReason ?? detail.message ?? "body mismatch");
+      }
+      throw error;
+    }
+
+    const executionId = response?.executionId ?? response?.execution_id;
+    if (!executionId) throw new Error(`${TOOL.executeTransfer} returned no execution id`);
+    return {
+      executionId,
+      idempotencyEnforcedRemotely: true,
+      replayed: response?.idempotentReplay === true,
+    };
   }
 
   async status(executionId: string): Promise<ExecutionStatus> {
@@ -133,7 +194,20 @@ export class McpKeeperHubClient implements KeeperHubClient {
       transactionLink?: string;
       gasUsedWei?: string;
       error?: string | null;
+      receipts?: Array<{
+        hash?: string;
+        verified?: boolean;
+        blockNumber?: number;
+        receiptStatus?: string;
+      }>;
     };
+
+    // The receipt KeeperHub reconciled against the chain, matched by hash. Its
+    // `verified` flag is a stronger claim than the execution's status, and it is
+    // the one a caller should gate an irreversible action on.
+    const receipt =
+      response?.receipts?.find((entry) => entry.hash === response.transactionHash) ??
+      response?.receipts?.[0];
 
     return {
       state: normalizeState(response?.status ?? "pending"),
@@ -141,6 +215,9 @@ export class McpKeeperHubClient implements KeeperHubClient {
       ...(response?.transactionLink ? { txLink: response.transactionLink } : {}),
       ...(response?.gasUsedWei ? { gasUsedWei: response.gasUsedWei } : {}),
       ...(response?.error ? { error: response.error } : {}),
+      ...(receipt?.verified === undefined ? {} : { verified: receipt.verified }),
+      ...(receipt?.blockNumber === undefined ? {} : { blockNumber: receipt.blockNumber }),
+      ...(receipt?.receiptStatus ? { receiptStatus: receipt.receiptStatus } : {}),
     };
   }
 }
@@ -164,4 +241,19 @@ export function parseError(error: unknown): ErrorDetail {
   } catch {
     return { message: text };
   }
+}
+
+/**
+ * Body for `execute_transfer`.
+ *
+ * The amount passes through verbatim. It is in ether units, so it is the exact
+ * case KeeperHub documents as breaking an idempotency binding when reformatted
+ * — "0.1" re-serialized as "0.10" is a different body under the same key.
+ */
+function transferBody(transfer: NativeTransfer): Record<string, string> {
+  return {
+    chain_id: transfer.chainId.toString(10),
+    to_address: transfer.toAddress,
+    amount: transfer.amount,
+  };
 }
