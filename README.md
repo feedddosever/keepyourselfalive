@@ -76,9 +76,14 @@ would be assigned the same nonce and all but one would be lost; with it they lan
 as consecutive transactions on consecutive nonces, and the run prints an explorer
 link for each.
 
-Defaults to WETH `deposit()` on Base Sepolia, which needs only native test ETH.
-`CHAIN_ID`, `TARGET_ADDRESS`, `EXECUTE_VALUE`, `GAS_CEILING` and `LEDGER_PATH`
-override it.
+Defaults to `approve(spender, 0)` on Base Sepolia USDC: it moves no value and
+needs no token balance, so the wallet only needs dust for gas. Two approvals
+naming two different spenders are two genuinely distinct intents contending for
+one nonce, which is the whole demonstration — the action itself is incidental.
+
+`EXECUTE_MODE=deposit` switches to WETH `deposit()` if you would rather see value
+move. `CHAIN_ID`, `TARGET_ADDRESS`, `EXECUTE_VALUE`, `EXECUTE_COUNT`,
+`GAS_CEILING` and `LEDGER_PATH` override the rest.
 
 The demo puts six agents on one key and walks through every rule above:
 
