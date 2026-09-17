@@ -1,0 +1,25 @@
+{
+  "name": "netted-tips",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nets Farcaster tip obligations into one batched settlement transaction, executed through KeeperHub.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "settle": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "viem": "^2.56.7"
+  }
+}
