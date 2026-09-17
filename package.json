@@ -9,9 +9,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "npm run compile && vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "settle": "tsx src/cli.ts"
+    "settle": "tsx src/cli.ts settle",
+    "compile": "node scripts/compile.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "plan": "tsx src/cli.ts plan"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -62,6 +62,13 @@ export class EpochLedger {
     return [...this.records.values()].filter((record) => record.status === "broadcast");
   }
 
+  /** The settled epoch immediately preceding `epochId`, by id order. */
+  previousEpochId(epochId: string): string | undefined {
+    return [...this.records.values()]
+      .filter((record) => record.epochId < epochId && record.status === "settled")
+      .sort((a, b) => (a.epochId < b.epochId ? 1 : -1))[0]?.epochId;
+  }
+
   /** Balances the last settled epoch rolled forward, as the next epoch's opening. */
   carriedFrom(epochId: string): NetPosition[] {
     const record = this.records.get(epochId);
