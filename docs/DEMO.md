@@ -1,149 +1,137 @@
 # Demo script
 
-Three acts, about three minutes. Each one answers a question the previous one
-raises. Run them in order — the order is the argument.
+Three acts, about three minutes. The order is the argument: each act answers the
+question the previous one raises.
 
 ## Before you record
 
 ```
 npm install
-npm test          # 82 green, gives you a clean slate on screen
+npm test          # 94 green, gives you a clean slate on screen
 ```
 
-For Act 3 only:
-
-```
-export KH_API_KEY=kh_…          # organization key, Settings → API Keys → Organisation
-export SENDER_ADDRESS=0xE4a475d134bB72ff8045eA4E4c762174408311a8
-```
+Have open: the [live page](https://lucid-keeperhub-test11-17fe.vercel.app),
+and [the transaction](https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359)
+on BaseScan.
 
 ---
 
-## Act 1 — the bug is real (40 seconds)
+## Act 1 — where Lucid stops (40 seconds)
+
+Open `packages/payments/src/x402-reconciliation.ts` in the Lucid repo, or just
+read the line from their types:
 
 ```
-npx vitest run test/nonce-collision.test.ts
+preflightIncoming — Evaluate amount and endpoint policies
+  before another rail attempts an irreversible settlement.
 ```
 
-**What to say:** "Two agents share a treasury key. Both build a transaction.
-Both are assigned nonce zero, because neither had landed when the other was
-built. This isn't a thought experiment — it's running in a real EVM right now."
+**What to say:** "Lucid Agents is Daydreams' machine-commerce runtime — typed
+functions become paid x402 entrypoints. It admits a payment when the facilitator
+says the credential is good, and issues its receipt from the payment payload.
+That's an HTTP response. Their own types name the next step and leave it to
+somebody else."
 
-**What to point at:** the second test name, and the assertion that Bob's balance
-is zero.
-
-> Alice is paid 1000. Bob's 2000 never happens. Neither transaction was
-> malformed. The second was built a moment too late, and it is gone — and both
-> submitters saw a successful submission.
-
-**The line that lands:** "Nobody is told. There's no error, no receipt, no
-retry. The money just isn't there."
-
-Then point at the third test — a higher-gas transaction on the same nonce
-*replaces* the first. "That's not a race any more, that's an accidental cancel."
+**The line that lands:** "*Before another rail attempts an irreversible
+settlement.* That's not a gap I found. That's a seam they documented."
 
 ---
 
-## Act 2 — the mechanism (60 seconds)
+## Act 2 — the join, and why it costs nothing (70 seconds)
+
+Show `reconcilePaymentIdentifier` refusing mismatches:
 
 ```
-npm run demo
+payment_identifier_required     the payload must include an identifier
+idempotency_key_required        Idempotency-Key is required when one is supplied
+payment_identifier_mismatch     the identifier must equal Idempotency-Key
 ```
 
-No API key needed, so this always works on stage.
+**What to say:** "Lucid already forces the x402 payment identifier to equal the
+HTTP Idempotency-Key. So I don't need to invent anything. I pass that identifier
+straight through as KeeperHub's idempotency_key."
 
-Six agents submit at once against one key. Walk the output:
+**The line that lands:** "The value a buyer retries with is the value that
+decides whether a transfer is broadcast or replayed. Nothing is generated,
+correlated or stored to make the retry safe — it falls out of an invariant they
+already enforce."
 
-| Step | What to say |
+Now switch to the live page and **press the buttons**:
+
+| Action | What to say |
 |---|---|
-| 1 | "Six submissions. One broadcast. The other five are queued, not lost." |
-| 2 | "Drain again, and again — still one. The lease is held." |
-| 3 | "The lease releases only when the transaction resolves. Then the next one goes." |
-| 4 | "A stale rebalance is dropped by its own submitter's fresher one. But no agent can drop *another* agent's work." |
-| 5 | "The gas ceiling is checked against the simulation, so the rejection costs nothing." |
-| 6 | "A wedged transaction quarantines the lane. It does *not* free it." |
+| *Buyer pays* | "One transfer. Simulate, execute, verified receipt." |
+| *Buyer retries* | "Same Idempotency-Key — which is what a real x402 buyer sends." |
+| *Buyer retries* again | "Still one. Press it all day; it stays at one." |
+| *Preflight would revert* | "Refused before broadcast. Costs nothing." |
+| *Receipt unverified* | "Confirmed isn't good enough. Fulfilling is irreversible." |
+| *No payment identifier* | "Refused outright — nothing to bind a retry to." |
 
-**The line that lands**, on step 6: "That's the subtle one. The wedged
-transaction might still land on its nonce. If we freed the lane, we'd put a
-second transaction on that same nonce — which is the exact bug we started with.
-So quarantine refuses new work and waits for a human."
-
-Finish on the audit trail: "Every decision, with its reason. That's what you'd
-hand an auditor."
+**Worth saying explicitly:** "That page is running the real settler from the
+repo. Only the transport is swapped. Those are the shipped code's decisions."
 
 ---
 
-## Act 3 — on chain (60 seconds)
+## Act 3 — on chain (50 seconds)
 
-```
-npm run execute
-```
+Open BaseScan. Point at the transaction, then at the two facts:
 
-Two agents, one key, two `approve` calls — zero value, so it costs only gas.
+| | |
+|---|---|
+| Payment identifier | `pay_lucid0917settle01` |
+| Receipt | `verified: true`, `receiptStatus: success`, block 46952279 |
+| Resent, same identifier | `idempotentReplay: true`, same hash, **no second transfer** |
 
-**What to say:** "Same six-agent logic, now against the real chain through
-KeeperHub. Watch the nonces."
-
-**What to point at:** the two BaseScan links at the end. Open both.
-
-**The line that lands:** "Two transactions. Consecutive nonces. Both landed.
-Without the firewall these two would have been assigned the same nonce and one
-of them would be gone — and you'd only find out by reconciling balances later."
+**The line that lands:** "The retry is the evidence, not the payment. Anyone can
+show you a transaction. The interesting part is the one that *didn't* happen."
 
 ---
 
 ## The KeeperHub-specific argument
 
-This is the part that separates the project from a generic queue, and it is
-worth saying explicitly, because it sounds like a criticism and isn't:
+Say this. It sounds like a criticism and isn't, and getting it right is what
+separates the project from a generic queue:
 
-> KeeperHub already has an idempotency key, and it's correct. It deliberately
-> excludes the nonce, so that a **retry of the same intent** replays the first
-> execution instead of paying twice. This project depends on that.
->
-> What it doesn't cover is **distinct intents submitted concurrently**. Two
-> different payments are two different intents, so they derive two different
-> keys, so nothing links them — and they still contend for one nonce.
-> Idempotency is about identity. This is about concurrency. They're orthogonal,
-> and you need both.
+> KeeperHub's idempotency key is correct and this depends on it. What this adds
+> is a reason for the key to already exist — Lucid mints it, for its own
+> purposes, before anyone thinks about settlement. The integration is mostly the
+> observation that those two identifiers should be the same one.
 
 ---
 
-## Questions you'll get, and the answers
+## Questions you'll get
 
-**"Why not just use a mutex?"**
-A crash releases a mutex — and a crash is exactly when a restarted scheduler
-re-derives the same plan and broadcasts it again. The lease is written to disk
-before the broadcast, so the restart finds it still held. There's a test that
-kills one process mid-flight and asserts the restart doesn't re-broadcast.
+**"Why not just store a map of payment id to transaction hash?"**
+That's a second source of truth that can disagree with the chain, and it has to
+be durable and consistent before the first payment. Reusing the identifier means
+there's nothing to keep in sync.
 
-**"Why not process in arrival order?"**
-Two schedulers racing the same queue see arrivals in different orders. If
-arrival broke ties they'd admit different intents and both would broadcast.
-Order is priority, then a hash of the intent's onchain effect — a pure function
-of the queue's contents, so every scheduler picks the same winner.
+**"What if the settlement is slow?"**
+It reports *pending*, never failed. Telling Lucid it failed while it may still
+land invites a second settlement for the same payment — the exact failure the
+identifier exists to prevent.
 
-**"What if the stuck transaction never lands?"**
-A human clears the quarantine, and that's deliberate. The agent can't know
-whether a pending transaction is dead or slow, and guessing wrong in either
-direction is expensive. It records why it stopped and waits.
+**"Why require `verified` rather than `confirmed`?"**
+KeeperHub distinguishes an execution it believes succeeded from one whose
+receipt it reconciled against the chain. Fulfilling an entrypoint can't be
+undone, so it takes the stronger signal.
 
-**"Does this need a database?"**
-No. Lane state is a JSON file with an atomic rename. Production would want
-something stronger for multiple schedulers on different machines, and the store
-is one interface — that's the honest answer, not a pretend one.
+**"Is this merged into Lucid?"**
+No. It consumes their public seam and imports nothing private, so it could
+become `@lucid-agents/keeperhub` — but that conversation hasn't happened. Say so
+plainly; it reads better than implying otherwise.
 
-**"What can't it do?"**
-It serializes one sender key. It does not make two *different* keys safe against
-each other, it doesn't do fee bumping for a genuinely stuck transaction, and the
-supersession rule needs submitters to name their resources honestly. All three
-are stated in the README rather than hidden.
+**"What doesn't work?"**
+Settlement is outbound only; collecting into a treasury is untouched. No live
+Lucid service is wired to it — the settler is tested against a faithful fake of
+their reconciliation output. And the nonce firewall underneath is unproven on
+KeeperHub's sponsored path, which `docs/EXECUTIONS.md` says outright.
 
 ---
 
-## If Act 3 fails on stage
+## If the live page won't load
 
-Fall back to Act 2 and say so plainly: "the chain call needs a funded key and a
-live credential; here's the same logic against a scripted executor, and here are
-the transaction links from the recorded run." Judges respond far better to that
-than to a demo that pretends.
+It may be behind Vercel's Deployment Protection, which shows a login wall to
+anyone who isn't the project owner. Fix it at **Project → Settings → Deployment
+Protection → Vercel Authentication → Disabled**. Failing that, run
+`npm run demo`, or open `public/index.html` locally — same page, same bundle.
