@@ -61,16 +61,26 @@ export function assertCallMatchesPlan(call: SettlementCall, plan: SettlementPlan
   }
 }
 
-/** `@keeperhub/sdk` reports six states; collapse them to the three we act on. */
+/**
+ * Collapses KeeperHub's execution states to the three this agent acts on.
+ *
+ * Only `completed` and `failed` are terminal. `unconfirmed` in particular means
+ * the transaction is already on chain but not yet confirmed — treating it as
+ * failure and re-sending would put a second transaction on the same nonce, so it
+ * maps to pending and the caller keeps polling.
+ */
 export function normalizeState(status: string): ExecutionStatus["state"] {
   switch (status) {
-    case "success":
     case "completed":
+    case "success":
       return "confirmed";
-    case "error":
     case "failed":
+    case "error":
     case "cancelled":
       return "failed";
+    case "pending":
+    case "running":
+    case "unconfirmed":
     default:
       return "pending";
   }

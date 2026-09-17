@@ -7,74 +7,120 @@ import {
   type SettlementCall,
   type SimulationResult,
 } from "../keeperhub.js";
+import { buildContractCallBody } from "./body.js";
 
-/**
- * ⚠️ UNVERIFIED — tool names and argument keys.
- *
- * `@keeperhub/mcp` is a transport only: it exposes `callTool(name, args)` and
- * bundles no schemas. The real ones live behind `tools/list` at
- * https://app.keeperhub.com/mcp, which needs a `kh_` key and network access.
- * The names below come from KeeperHub's documented call sequence; confirm them
- * with one `tools/list` before trusting this adapter with money.
- */
 const TOOL = {
   executeContractCall: "execute_contract_call",
   getStatus: "get_direct_execution_status",
 } as const;
 
+export interface CallToolCapable {
+  callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
+}
+
 export interface McpClientOptions {
   apiKey: string;
   baseUrl?: string;
+  /** Inject for tests; defaults to the real MCP transport. */
+  transport?: CallToolCapable;
 }
 
-interface CallToolCapable {
-  callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
+/**
+ * Raised when KeeperHub says the body does not match the one this key was bound
+ * to. Deliberately fatal: the documented remedy is to rebuild the body to match
+ * the original and keep the key, because rotating it escapes the in-flight guard
+ * and can broadcast a second transaction. Nothing here retries on its own.
+ */
+export class IdempotencyConflictError extends Error {
+  constructor(readonly idempotencyKey: string, detail: string) {
+    super(
+      `idempotency_conflict for key ${idempotencyKey}: ${detail}. The body drifted, not ` +
+        "the intent — rebuild it byte-for-byte and reuse this key. Rotating the key here " +
+        "can broadcast a second transaction.",
+    );
+    this.name = "IdempotencyConflictError";
+  }
+}
+
+/** Raised while the first request under this key is still running; retry the same key. */
+export class IdempotencyInProgressError extends Error {
+  readonly retryable = true;
+  constructor(readonly idempotencyKey: string) {
+    super(`idempotency_in_progress for key ${idempotencyKey}; retry shortly with the same key`);
+    this.name = "IdempotencyInProgressError";
+  }
 }
 
 /**
  * KeeperHub via the MCP endpoint.
  *
- * Preferred over the REST adapter when available: because `callTool` passes
- * arbitrary arguments, this is the only transport that can carry `simulate` and
- * `idempotency_key` through to KeeperHub, which makes exactly-once enforceable
- * on the server rather than only in the local ledger.
+ * Preferred over the REST adapter: `execute_contract_call` here accepts both
+ * `simulate` and `idempotency_key`, neither of which `@keeperhub/sdk@0.1.1`
+ * exposes at all.
  */
 export class McpKeeperHubClient implements KeeperHubClient {
   private readonly client: CallToolCapable;
 
   constructor(options: McpClientOptions) {
-    this.client = getClient(options.apiKey, {
-      clientInfo: { name: "netted-tips", version: "0.1.0" },
-      ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
-    }) as unknown as CallToolCapable;
+    this.client =
+      options.transport ??
+      (getClient(options.apiKey, {
+        clientInfo: { name: "nonce-firewall", version: "0.1.0" },
+        ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
+      }) as unknown as CallToolCapable);
   }
 
+  /**
+   * A failing dry run arrives as an HTTP 400, not a result with `ok: false`, so
+   * the rejection has to be read out of the thrown error. Code that only handles
+   * the happy path sees a transport failure and may retry a call the simulator
+   * already decided would revert.
+   */
   async simulate(call: SettlementCall): Promise<SimulationResult> {
-    const response = (await this.client.callTool(TOOL.executeContractCall, {
-      ...toolArgs(call),
-      simulate: true,
-    })) as { error?: string; revertReason?: string; gasEstimate?: string };
+    try {
+      const response = (await this.client.callTool(TOOL.executeContractCall, {
+        ...buildContractCallBody(call),
+        simulate: true,
+      })) as { wouldRevert?: boolean; revertReason?: string; gasEstimate?: string };
 
-    const reason = response?.revertReason ?? response?.error;
-    return reason
-      ? { ok: false, revertReason: reason, via: "keeperhub" }
-      : {
-          ok: true,
+      return response?.wouldRevert
+        ? { ok: false, revertReason: response.revertReason ?? "would revert", via: "keeperhub" }
+        : {
+            ok: true,
+            via: "keeperhub",
+            ...(response?.gasEstimate ? { gasEstimate: response.gasEstimate } : {}),
+          };
+    } catch (error) {
+      const detail = parseError(error);
+      if (detail.wouldRevert || detail.code === "insufficient_balance" || detail.revertReason) {
+        return {
+          ok: false,
+          revertReason: detail.revertReason ?? detail.code ?? "simulation failed",
           via: "keeperhub",
-          ...(response?.gasEstimate ? { gasEstimate: response.gasEstimate } : {}),
         };
+      }
+      throw error;
+    }
   }
 
   async execute(call: SettlementCall, idempotencyKey: string): Promise<ExecutionHandle> {
-    const response = (await this.client.callTool(TOOL.executeContractCall, {
-      ...toolArgs(call),
-      idempotency_key: idempotencyKey,
-    })) as { executionId?: string; execution_id?: string };
+    let response: { executionId?: string; execution_id?: string };
+    try {
+      response = (await this.client.callTool(TOOL.executeContractCall, {
+        ...buildContractCallBody(call),
+        idempotency_key: idempotencyKey,
+      })) as { executionId?: string; execution_id?: string };
+    } catch (error) {
+      const detail = parseError(error);
+      if (detail.code === "idempotency_in_progress") throw new IdempotencyInProgressError(idempotencyKey);
+      if (detail.code === "idempotency_conflict") {
+        throw new IdempotencyConflictError(idempotencyKey, detail.revertReason ?? detail.message ?? "body mismatch");
+      }
+      throw error;
+    }
 
     const executionId = response?.executionId ?? response?.execution_id;
-    if (!executionId) {
-      throw new Error(`${TOOL.executeContractCall} returned no execution id`);
-    }
+    if (!executionId) throw new Error(`${TOOL.executeContractCall} returned no execution id`);
     return { executionId, idempotencyEnforcedRemotely: true };
   }
 
@@ -99,12 +145,23 @@ export class McpKeeperHubClient implements KeeperHubClient {
   }
 }
 
-function toolArgs(call: SettlementCall): Record<string, unknown> {
-  return {
-    network: call.network,
-    contractAddress: call.contractAddress,
-    functionName: call.functionName,
-    functionArgs: JSON.stringify(call.args),
-    abi: JSON.stringify(call.abi),
-  };
+interface ErrorDetail {
+  code?: string;
+  revertReason?: string;
+  message?: string;
+  wouldRevert?: boolean;
+}
+
+/** KeeperHub returns a JSON body inside the error text; branch on `code`, not prose. */
+export function parseError(error: unknown): ErrorDetail {
+  const text = error instanceof Error ? error.message : String(error);
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return { message: text };
+  try {
+    const body = JSON.parse(text.slice(start, end + 1)) as ErrorDetail & { error?: string };
+    return { ...body, message: body.message ?? body.error ?? text };
+  } catch {
+    return { message: text };
+  }
 }

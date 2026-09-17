@@ -3,9 +3,11 @@
 Kept live while building, not reconstructed afterwards. Ordered by how much time
 each cost, worst first.
 
-Environment note: this was built in a sandbox where `docs.keeperhub.com`,
-`keeperhub.com` and `app.keeperhub.com` were all unreachable (egress policy) and
-no API key was available. That is an unusual constraint, but it turned out to be
+Environment note: the first pass was built in a sandbox where
+`docs.keeperhub.com`, `keeperhub.com` and `app.keeperhub.com` were all
+unreachable (egress policy) and no API key was available. The MCP server was
+connected later, which turned several reconstructed guesses into verified
+findings — entries 2, 2b and 2c below are what that comparison produced. That is an unusual constraint, but it turned out to be
 a useful one — it surfaced exactly which parts of onboarding depend on a human
 reading a website, which is precisely the part an *agent* integrating KeeperHub
 cannot do.
@@ -42,7 +44,65 @@ local `eth_call` preflight and ledger-only idempotency.
 or say plainly in the SDK README that exactly-once execution requires the MCP
 surface. The silent version of this is the dangerous one.
 
-## 2. `@keeperhub/mcp` ships no tool schemas
+## 2. The two official surfaces name the same fields differently
+
+Once the MCP server was connected, the reconstructed argument keys turned out to
+be wrong — and wrong in a way no amount of care would have avoided, because the
+two surfaces genuinely disagree:
+
+| Field | `@keeperhub/sdk` (REST) | `execute_contract_call` (MCP) |
+|---|---|---|
+| target | `contractAddress` | `contract_address` |
+| chain | `network` | `chain_id` |
+| function | `functionName` | `function_name` |
+| args | `functionArgs` | `function_args` |
+
+camelCase with `network` on one, snake_case with `chain_id` on the other, for the
+same call against the same platform. An integrator who reads the SDK types and
+then moves to MCP for the features the SDK lacks — which is the documented path
+for anything needing `simulate` or `idempotency_key` — has to rename every field.
+
+**Fix:** accept both spellings on the MCP tool, or note the mapping in the SDK
+README. This one is cheap to fix and costs everybody who hits it an hour.
+
+## 2b. A failed dry run arrives as an HTTP 400, not a result
+
+`execute_contract_call` with `simulate: true` returns its verdict *as an error*
+when the call would revert. The body is excellent — `code`,
+`failureKind`, `wouldRevert`, `revertReason`, `balanceWei`, `shortfallWei`, and a
+"Next step" narrative — but it is delivered through the failure path.
+
+Naive code wraps the call in try/catch, sees an exception, and treats a
+successful preflight rejection as a transport error: it retries, or escalates, or
+reports the integration as down. The correct handling is to parse the body and
+branch on `code`. `src/adapters/mcp.ts` does, and `test/mcp-adapter.test.ts`
+pins the behaviour against a verbatim captured response.
+
+**Fix:** return `{ success: false, wouldRevert: true, ... }` with HTTP 200 for a
+preflight that worked and found a problem. Reserve non-2xx for calls that did not
+run. A dry run that correctly predicts a revert has succeeded at its job.
+
+## 2c. The idempotency key is bound to the request body, and the trap is sharp
+
+This is documented in the tool description and deserves to be louder:
+
+> If it is the same intent you already sent, the body drifted rather than the
+> intent — re-serializing `0.1` as `0.10`, or `network` for `chainId`, produces
+> this — so rebuild the body to match the original and keep the key. **Rotating
+> there escapes the in-flight guard and can broadcast a second transaction.**
+
+So the natural recovery instinct — got a conflict, mint a fresh key, try again —
+is the one action that can double-spend. And the trigger is cosmetic
+serialization drift, which is invisible in review.
+
+`src/adapters/body.ts` responds by making the body a pure function of the intent
+and refusing any bigint or float before it can reach the wire; six tests cover
+it. `IdempotencyConflictError` is deliberately fatal and says why in its message.
+
+**Fix:** ship a body-canonicalization helper in the SDK. Every integrator is
+re-deriving this, and the failure mode is silent duplicate payment.
+
+## 3. `@keeperhub/mcp` ships no tool schemas
 
 The package is a transport: `callTool(name, args)` with `args` typed as
 `Record<string, unknown>`. The schemas live server-side behind `tools/list`,
@@ -74,7 +134,7 @@ the docs site does not know to go read the types.
 **Fix:** link the `.d.ts` from the quickstart, and treat it as a first-class
 onboarding surface. It is already doing the job; it just is not signposted.
 
-## 4. Two key types, one of which silently is not the one you want
+## 5. Two key types, one of which silently is not the one you want
 
 `kh_` (organization, Settings → API Keys → Organisation) works for MCP and REST.
 `wfb_` (user) works only for webhook triggers. The SDK carries a dedicated
@@ -85,7 +145,7 @@ that it earned an error string.
 top of the quickstart — "there are two kinds of key and you want the `kh_` one" —
 rather than a message you meet after the first failure.
 
-## 5. `simulate: true` is EVM-only, and the failure arrives late
+## 6. `simulate: true` is EVM-only, and the failure arrives late
 
 `assertSimulationSupported` rejects Solana chain ids. A builder who chooses a
 chain first and discovers the preflight is unavailable afterwards has to redesign
