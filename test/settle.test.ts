@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EpochLedger } from "../src/ledger.js";
-import type { ContractCall, ExecutionStatus, KeeperHubClient } from "../src/keeperhub.js";
+import type { ExecutionHandle, ExecutionStatus, KeeperHubClient, SettlementCall, SimulationResult } from "../src/keeperhub.js";
 import { planSettlement } from "../src/netting.js";
 import { resume, settleEpoch } from "../src/settle.js";
 import type { SettlementConfig, TipEvent } from "../src/types.js";
@@ -24,27 +24,27 @@ const TIPS: TipEvent[] = [
 ];
 
 class FakeKeeperHub implements KeeperHubClient {
-  broadcasts: { key: string; call: ContractCall }[] = [];
+  broadcasts: { key: string; call: SettlementCall }[] = [];
   simulationOk = true;
   revertReason: string | undefined;
   private statuses = new Map<string, ExecutionStatus>();
   private byKey = new Map<string, string>();
 
-  async simulate(): Promise<{ ok: boolean; revertReason?: string }> {
+  async simulate(): Promise<SimulationResult> {
     return this.simulationOk
-      ? { ok: true }
-      : { ok: false, ...(this.revertReason ? { revertReason: this.revertReason } : {}) };
+      ? { ok: true, via: "keeperhub" }
+      : { ok: false, via: "keeperhub", ...(this.revertReason ? { revertReason: this.revertReason } : {}) };
   }
 
   /** Mirrors KeeperHub's documented behaviour: a repeated key replays the first execution. */
-  async execute(call: ContractCall, idempotencyKey: string): Promise<{ executionId: string }> {
+  async execute(call: SettlementCall, idempotencyKey: string): Promise<ExecutionHandle> {
     const seen = this.byKey.get(idempotencyKey);
-    if (seen) return { executionId: seen };
+    if (seen) return { executionId: seen, idempotencyEnforcedRemotely: true };
     const executionId = `exec-${this.broadcasts.length + 1}`;
     this.broadcasts.push({ key: idempotencyKey, call });
     this.byKey.set(idempotencyKey, executionId);
     this.statuses.set(executionId, { state: "pending" });
-    return { executionId };
+    return { executionId, idempotencyEnforcedRemotely: true };
   }
 
   async status(executionId: string): Promise<ExecutionStatus> {

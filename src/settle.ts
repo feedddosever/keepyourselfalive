@@ -1,6 +1,6 @@
-import { encodeSettlement } from "./calldata.js";
+import { buildSettlementCall } from "./calldata.js";
 import { idempotencyKey } from "./idempotency.js";
-import { assertCallMatchesPlan, type ContractCall, type KeeperHubClient } from "./keeperhub.js";
+import { assertCallMatchesPlan, type KeeperHubClient } from "./keeperhub.js";
 import type { EpochLedger, EpochRecord } from "./ledger.js";
 import type { SettlementPlan } from "./types.js";
 
@@ -56,11 +56,7 @@ export async function settleEpoch(
   const existing = ledger.get(plan.epochId);
   if (existing?.status === "settled") return existing;
 
-  const call: ContractCall = {
-    chainId: plan.chainId,
-    to: plan.disperser,
-    data: encodeSettlement(plan),
-  };
+  const call = buildSettlementCall(plan);
   assertCallMatchesPlan(call, plan);
 
   const simulation = await client.simulate(call);
@@ -82,6 +78,7 @@ export async function settleEpoch(
         status: "settled",
         executionId: handle.executionId,
         ...(status.txHash ? { txHash: status.txHash } : {}),
+        ...(status.txLink ? { txLink: status.txLink } : {}),
       });
     }
     if (status.state === "failed") {

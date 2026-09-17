@@ -1,54 +1,77 @@
 import type { SettlementPlan } from "./types.js";
 
 /**
- * The KeeperHub surface this agent depends on, narrowed to three calls.
+ * The KeeperHub surface this agent depends on, narrowed to three operations.
  *
- * ⚠️ ADAPTER BOUNDARY — the field names below are reconstructed, not read off the
- * docs (docs.keeperhub.com was unreachable from the build environment). The
- * documented call sequence is:
+ * Shapes here follow `@keeperhub/sdk@0.1.1`'s Direct Execution API, which takes a
+ * function name plus JSON-encoded args rather than raw calldata.
  *
- *   execute_contract_call { simulate: true }      → dry run, no value moves
- *   execute_contract_call { idempotency_key }     → broadcast, replayed on retry
- *   get_direct_execution_status { execution_id }  → once per execution id
+ * Two implementations satisfy this port because the two official surfaces do not
+ * agree on what they expose — see `docs/FRICTION.md`:
  *
- * Everything else in this repo is written against this interface, so reconciling
- * it with the real schema is a one-file change.
+ *   RestKeeperHubClient — @keeperhub/sdk. No simulate, no idempotency key.
+ *   McpKeeperHubClient  — @keeperhub/mcp. Generic `callTool`, so the documented
+ *                         `simulate` / `idempotency_key` arguments can be passed.
  */
-export interface ContractCall {
+export interface SettlementCall {
+  /** Chain id or network name; the API accepts either ("base", "8453"). */
+  network: string;
   chainId: number;
-  to: string;
-  data: `0x${string}`;
-  value?: string;
+  contractAddress: string;
+  functionName: string;
+  args: readonly unknown[];
+  abi: readonly unknown[];
 }
 
 export interface SimulationResult {
   ok: boolean;
   gasEstimate?: string;
   revertReason?: string;
+  /** How the preflight was performed, so the audit trail never overstates it. */
+  via: "keeperhub" | "local-eth-call";
 }
 
 export interface ExecutionHandle {
   executionId: string;
+  /** False when the transport could not carry the idempotency key to KeeperHub. */
+  idempotencyEnforcedRemotely: boolean;
 }
 
 export interface ExecutionStatus {
   state: "pending" | "confirmed" | "failed";
   txHash?: string;
+  txLink?: string;
+  gasUsedWei?: string;
   error?: string;
 }
 
 export interface KeeperHubClient {
-  simulate(call: ContractCall): Promise<SimulationResult>;
-  execute(call: ContractCall, idempotencyKey: string): Promise<ExecutionHandle>;
+  simulate(call: SettlementCall): Promise<SimulationResult>;
+  execute(call: SettlementCall, idempotencyKey: string): Promise<ExecutionHandle>;
   status(executionId: string): Promise<ExecutionStatus>;
 }
 
-/** Guard rail independent of the adapter: the plan must target the configured disperser. */
-export function assertCallMatchesPlan(call: ContractCall, plan: SettlementPlan): void {
+/** Guard rail independent of the transport: the call must match the plan it came from. */
+export function assertCallMatchesPlan(call: SettlementCall, plan: SettlementPlan): void {
   if (call.chainId !== plan.chainId) {
     throw new Error(`call targets chain ${call.chainId}, plan is for ${plan.chainId}`);
   }
-  if (call.to.toLowerCase() !== plan.disperser) {
-    throw new Error(`call targets ${call.to}, plan disperses via ${plan.disperser}`);
+  if (call.contractAddress.toLowerCase() !== plan.disperser) {
+    throw new Error(`call targets ${call.contractAddress}, plan disperses via ${plan.disperser}`);
+  }
+}
+
+/** `@keeperhub/sdk` reports six states; collapse them to the three we act on. */
+export function normalizeState(status: string): ExecutionStatus["state"] {
+  switch (status) {
+    case "success":
+    case "completed":
+      return "confirmed";
+    case "error":
+    case "failed":
+    case "cancelled":
+      return "failed";
+    default:
+      return "pending";
   }
 }

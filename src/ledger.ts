@@ -11,6 +11,7 @@ export interface EpochRecord {
   plan: SerializedPlan;
   executionId?: string;
   txHash?: string;
+  txLink?: string;
   error?: string;
   updatedAtMs: number;
 }

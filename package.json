@@ -20,6 +20,13 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
+    "@ethereumjs/common": "^4.4.0",
+    "@ethereumjs/tx": "^5.4.0",
+    "@ethereumjs/util": "^9.1.0",
+    "@ethereumjs/vm": "^8.1.1",
+    "@keeperhub/mcp": "^0.1.1",
+    "@keeperhub/sdk": "^0.1.1",
+    "solc": "^0.8.37",
     "viem": "^2.56.7"
   }
 }

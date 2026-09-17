@@ -1,49 +1,106 @@
 # Friction report: zero to first transaction
 
 Kept live while building, not reconstructed afterwards. Ordered by how much time
-each cost.
+each cost, worst first.
 
-## 1. The docs are the first hard dependency and they are not mirrored anywhere
+Environment note: this was built in a sandbox where `docs.keeperhub.com`,
+`keeperhub.com` and `app.keeperhub.com` were all unreachable (egress policy) and
+no API key was available. That is an unusual constraint, but it turned out to be
+a useful one — it surfaced exactly which parts of onboarding depend on a human
+reading a website, which is precisely the part an *agent* integrating KeeperHub
+cannot do.
 
-`docs.keeperhub.com` was unreachable from a sandboxed build environment (egress
-policy). There is no offline copy of the tool schemas — not in the npm package,
-not in the repo, not in a `llms.txt`. That turned the single most load-bearing
-part of the integration, the exact parameter names for `execute_contract_call`,
-into guesswork isolated behind an interface.
+---
 
-**Cost:** the entire execution path is written against a reconstructed schema.
-**Fix that would have removed it:** ship the tool schemas inside the npm package,
-or publish `llms.txt` / an OpenAPI document at a stable path. An agent building
-against KeeperHub cannot read a docs site; it needs machine-readable schemas.
+## 1. The two official surfaces disagree on the safety-critical features
 
-## 2. The idempotency key contract is subtle and stated only in prose
+This is the big one, and it is checkable in thirty seconds:
 
-The rule that makes it work — *the nonce is deliberately not part of the key, so
-a retry of the same intent reproduces it and KeeperHub replays the first
-execution* — is the single most important sentence for anyone moving real money.
-It is easy to miss, and getting it wrong pays a creator twice.
+```
+$ grep -rniE 'idempot|simulat|dry.?run' node_modules/@keeperhub/sdk/
+$ grep -rniE 'idempot|simulat|dry.?run' node_modules/@keeperhub/mcp/
+```
 
-**Fix:** a `deriveIdempotencyKey(plan)` helper in the SDK, so the canonical form
-is not re-implemented (differently) by every integrator. Failing that, a worked
-example showing which fields are in and which are out, with the reasoning.
+Both return nothing. `@keeperhub/sdk@0.1.1`'s `DirectContractCallInput` has
+`contractAddress`, `network`, `functionName`, `functionArgs`, `abi`, `value` and
+`gasLimitMultiplier` — **no `simulate`, no `idempotency_key`.** Yet the
+documented agent pattern is `execute_contract_call` with `simulate: true`, then
+with `idempotency_key`, then `get_direct_execution_status`.
 
-## 3. `simulate: true` is EVM-only, and the failure is late
+So the exactly-once story is reachable through MCP and not through the official
+REST SDK. A builder who picks the SDK — the one named "Official REST SDK", the
+obvious choice for a backend service — silently loses both the preflight and the
+duplicate-broadcast guarantee, and nothing in the types tells them so. For an
+agent moving money on a schedule, that is the difference between paying a creator
+once and paying them twice.
 
-`assertSimulationSupported` rejects Solana chain ids. A builder who picks a chain
-first and discovers the preflight is unavailable afterwards has to redesign their
-safety story.
+**Cost:** the whole execution layer had to be built twice, once per transport
+(`src/adapters/rest.ts`, `src/adapters/mcp.ts`), with the REST path degrading to a
+local `eth_call` preflight and ledger-only idempotency.
 
-**Fix:** state the per-chain capability matrix on the quickstart page, above the
-code sample, not in the error.
+**Fix:** either add `simulate` and `idempotencyKey` to `DirectContractCallInput`,
+or say plainly in the SDK README that exactly-once execution requires the MCP
+surface. The silent version of this is the dangerous one.
 
-## 4. Onboarding assumes a chain and a funded key before it assumes a plan
+## 2. `@keeperhub/mcp` ships no tool schemas
 
-The fastest path to a first transaction still requires: pick a chain, find a
-faucet, deploy or locate a target contract, then write the call. A
-`create-keeperhub-agent` starter that ships a working cron → simulate → execute
-loop against a pre-deployed testnet contract would move first-transaction time
-from hours to minutes.
+The package is a transport: `callTool(name, args)` with `args` typed as
+`Record<string, unknown>`. The schemas live server-side behind `tools/list`,
+which needs a `kh_` key and network access. An agent that cannot reach
+`app.keeperhub.com` — or a developer writing code before provisioning a key —
+has no way to learn the argument names for the one call that moves money.
 
-**Proposed for the bounty:** that starter template plus a quickstart whose first
-code block is a complete, runnable, exactly-once execution — not a bare
-`execute_contract_call`.
+**Cost:** `src/adapters/mcp.ts` is written against reconstructed argument keys and
+is marked unverified at the top of the file.
+
+**Fix:** generate the tool schemas into the package at build time, or publish them
+as static JSON. Everything else about `@keeperhub/mcp` is well built — the lazy
+session, the 401/404 re-init, the key classification — which makes the missing
+schemas stand out more.
+
+## 3. The npm types are better documentation than the docs site, and nothing says so
+
+The single most useful onboarding artifact turned out to be
+`node_modules/@keeperhub/sdk/dist/index.d.ts`: 298 lines, well commented, and it
+answered every structural question — that `network` accepts `"base"` or `"8453"`,
+that `functionArgs` is a JSON *string* rather than an array, that `abi` is
+auto-fetched from the explorer when omitted, that read and write calls return
+different shapes from the same method and need `isReadResult` to discriminate,
+that `ExecutionStatus` has six states rather than three.
+
+None of that is discoverable from a landing page, and a builder who starts at
+the docs site does not know to go read the types.
+
+**Fix:** link the `.d.ts` from the quickstart, and treat it as a first-class
+onboarding surface. It is already doing the job; it just is not signposted.
+
+## 4. Two key types, one of which silently is not the one you want
+
+`kh_` (organization, Settings → API Keys → Organisation) works for MCP and REST.
+`wfb_` (user) works only for webhook triggers. The SDK carries a dedicated
+`WFB_KEY_NOT_FOR_MCP_MESSAGE` constant, which means enough people have hit this
+that it earned an error string.
+
+**Fix:** if it needs a bespoke error constant, it needs to be one sentence at the
+top of the quickstart — "there are two kinds of key and you want the `kh_` one" —
+rather than a message you meet after the first failure.
+
+## 5. `simulate: true` is EVM-only, and the failure arrives late
+
+`assertSimulationSupported` rejects Solana chain ids. A builder who chooses a
+chain first and discovers the preflight is unavailable afterwards has to redesign
+their safety story around it.
+
+**Fix:** a per-chain capability matrix on the quickstart page, above the code
+sample, not in the error.
+
+---
+
+## Proposed for the bounty
+
+A `create-keeperhub-agent` starter whose first runnable example is a complete
+exactly-once execution — simulate, broadcast with an idempotency key, poll, and a
+durable record that survives a crash between broadcast and confirmation — rather
+than a bare `execute_contract_call`. The loop in `src/settle.ts` plus
+`src/ledger.ts` is that example, extracted from a real integration; the four
+failure modes it covers are listed in the README table.
