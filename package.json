@@ -1,9 +1,9 @@
 {
-  "name": "nonce-firewall",
+  "name": "lucid-keeperhub",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Serializes competing intents on a shared treasury key so concurrent agents cannot collide, replace, or strand each other's transactions.",
+  "description": "Settles Lucid Agents x402 payments through KeeperHub, keyed by the payment identifier Lucid already enforces, and finalized only on a receipt reconciled against the chain.",
   "engines": {
     "node": ">=22"
   },
@@ -19,7 +19,8 @@
     "prerender": "esbuild src/web/demo.ts --bundle --format=iife --target=es2022 --minify --outfile=public/demo.js",
     "vercel-build": "npm run prerender",
     "execute": "tsx src/firewall/execute.ts",
-    "agent": "tsx examples/lucid-agent/server.ts"
+    "agent": "tsx examples/lucid-agent/server.ts",
+    "verify:live": "node scripts/verify-live.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

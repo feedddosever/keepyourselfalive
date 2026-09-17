@@ -28,9 +28,17 @@ transaction. **[docs/DEMO.md](docs/DEMO.md)** is the demo script.
 
 ```
 npm install
-npm test     # 94 tests
-npm run demo # the firewall, no API key needed
+npm test            # 94 tests, no credentials needed
+npm run demo        # the firewall walkthrough, no credentials needed
+
+KH_API_KEY=kh_… npm run agent         # a real Lucid agent that settles on chain
+KH_API_KEY=kh_… npm run verify:live   # all four checks, end to end
 ```
+
+`verify:live` boots the agent and proves the whole path in one command: Lucid
+serves its card, Lucid rejects a malformed `Idempotency-Key` before the handler
+runs, a valid key settles through KeeperHub, and the same key replays instead of
+paying twice.
 
 ---
 
