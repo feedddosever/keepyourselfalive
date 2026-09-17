@@ -18,7 +18,8 @@
     "demo": "tsx src/firewall/demo.ts",
     "prerender": "esbuild src/web/demo.ts --bundle --format=iife --target=es2022 --minify --outfile=public/demo.js",
     "vercel-build": "npm run prerender",
-    "execute": "tsx src/firewall/execute.ts"
+    "execute": "tsx src/firewall/execute.ts",
+    "agent": "tsx examples/lucid-agent/server.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -32,9 +33,17 @@
     "@ethereumjs/tx": "^5.4.0",
     "@ethereumjs/util": "^9.1.0",
     "@ethereumjs/vm": "^8.1.1",
+    "@hono/node-server": "^2.1.1",
     "@keeperhub/mcp": "^0.1.1",
     "@keeperhub/sdk": "^0.1.1",
+    "@lucid-agents/core": "^5.0.0",
+    "@lucid-agents/hono": "^1.0.2",
+    "@lucid-agents/http": "^4.0.0",
+    "@lucid-agents/payments": "^5.0.0",
+    "@lucid-agents/types": "^3.0.0",
+    "hono": "^4.13.8",
     "solc": "^0.8.37",
-    "viem": "^2.56.7"
+    "viem": "^2.56.7",
+    "zod": "^4.4.3"
   }
 }

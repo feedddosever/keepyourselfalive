@@ -156,9 +156,10 @@
       Not merged upstream — this consumes Lucid's public seam and imports nothing private,
       so it could become <code>@lucid-agents/keeperhub</code>, but that conversation has not
       happened. Settlement is outbound only; collecting <em>into</em> a treasury is untouched.
-      No live Lucid service is wired to it — the settler is tested against a faithful fake of
-      Lucid's reconciliation output, not a running entrypoint. And the nonce firewall
-      underneath is unproven on KeeperHub's sponsored path.
+      Inbound x402 admission is not wired — a real Lucid agent runs and settles on invoke
+      (<code>examples/lucid-agent</code>), but it does not yet verify an incoming x402
+      credential through Lucid's authorizer. And the nonce firewall underneath is unproven
+      on KeeperHub's sponsored path.
     </p>
   </div>
 

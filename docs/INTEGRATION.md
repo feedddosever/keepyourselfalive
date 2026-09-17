@@ -87,6 +87,55 @@ That last row is deliberate. Telling Lucid a settlement failed when it may still
 land invites a second settlement for the same payment — which is exactly the
 failure the identifier is meant to prevent.
 
+## A running Lucid service
+
+`examples/lucid-agent/server.ts` is a real Lucid agent built on their published
+packages — `@lucid-agents/core`, `/http`, `/hono` — serving their agent card and
+their entrypoint. Not a reimplementation:
+
+```
+$ npm run agent
+lucid agent listening on http://localhost:3141
+  agent card   GET  /.well-known/agent-card.json
+  entrypoint   POST /entrypoints/summarize/invoke
+
+$ curl localhost:3141/.well-known/agent-card.json
+{"protocolVersion":"1.0","name":"summarizer","skills":[{"id":"summarize", ...
+```
+
+Two behaviours confirm the integration sits on Lucid's real seam rather than
+beside it:
+
+**Lucid rejects a malformed key before the handler runs.** Their HTTP extension
+validates `Idempotency-Key` at 20–256 characters:
+
+```
+$ curl -X POST .../entrypoints/summarize/invoke -H 'Idempotency-Key: short'
+{"error":{"code":"invalid_idempotency_key",
+          "message":"Idempotency-Key must contain 20 to 256 characters"}}
+```
+
+That error is Lucid's, not this project's. The settlement path is never reached.
+
+**A valid key reaches KeeperHub.** With `Idempotency-Key: pay_lucid0917settle01`
+the handler settles through `LucidKeeperHubSettler` and the call goes out to the
+MCP endpoint — in a sandbox without egress it fails there, and nowhere earlier:
+
+```
+{"error":{"code":"internal_error",
+          "message":"KeeperHub initialize failed (403): Host not in allowlist"}}
+```
+
+The handler also returns Lucid's own settlement record:
+
+```ts
+payment: { actualAmount: PRICE_ETH, asset: "ETH", reference: settlement.txHash }
+```
+
+`reference` is documented in Lucid's types as a *"verified payment channel or
+session reference"*. Putting the transaction hash there means Lucid's accounting
+ends up pointing at a receipt that was reconciled against the chain.
+
 ## Proof
 
 A real settlement, on Base Sepolia, keyed by a Lucid-format payment identifier
@@ -118,6 +167,9 @@ audit trail. Testnet — Base Sepolia (84532).
 - **The nonce firewall underneath is unproven on the sponsored path.** See
   `docs/EXECUTIONS.md`: KeeperHub sponsors and relays these sends, so the
   consecutive-nonce claim is not established for them.
-- **No live Lucid service is wired to it.** The settler is tested against a
-  faithful fake of Lucid's reconciliation output, not against a running
-  entrypoint.
+- **Inbound x402 is not wired.** The running agent settles outbound on invoke;
+  it does not yet verify an incoming x402 credential through Lucid's
+  `createIncomingPaymentAuthorizer`. The identifier it keys on is the
+  `Idempotency-Key` Lucid validates, which is the value its x402 reconciliation
+  forces the payment identifier to equal — but the x402 admission leg itself is
+  not exercised.
