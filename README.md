@@ -57,6 +57,7 @@ substitutes a local `eth_call` preflight and says so in `via`, and reports
 ```
 npm install
 npm test                 # 38 tests, including the contract in a real EVM
+cp examples/tips.sample.jsonl state/tips.jsonl
 npm run plan             # offline: netting and idempotency key, nothing broadcast
 ```
 
