@@ -16,12 +16,13 @@
     "deploy": "node scripts/deploy.mjs",
     "plan": "tsx src/cli.ts plan",
     "demo": "tsx src/firewall/demo.ts",
-    "prerender": "tsc -p tsconfig.build.json && node scripts/prerender.mjs",
+    "prerender": "esbuild src/web/demo.ts --bundle --format=iife --target=es2022 --minify --outfile=public/demo.js",
     "vercel-build": "npm run prerender",
     "execute": "tsx src/firewall/execute.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

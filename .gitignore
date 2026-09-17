@@ -7,3 +7,4 @@ state/
 *.log
 public/scenario.json
 .vercel/
+public/demo.js

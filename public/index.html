@@ -3,180 +3,211 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nonce Firewall</title>
-<meta name="description" content="Admission control in front of KeeperHub, so concurrent agents sharing a treasury key cannot collide on a nonce.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚦</text></svg>">
+<title>Lucid Agents × KeeperHub</title>
+<meta name="description" content="Lucid Agents settles on an HTTP response. This makes it settle on a verified onchain receipt, without generating a single new identifier.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
 <style>
   :root {
-    --bg: #fbfbfa; --panel: #ffffff; --ink: #1a1a19; --muted: #6b6b66;
-    --line: #e4e4e0; --accent: #1f6f4a; --warn: #9a5b12; --bad: #a3352b;
-    --code-bg: #f4f4f1;
+    --bg:#fbfbfa; --panel:#fff; --ink:#1a1a19; --muted:#6b6b66; --line:#e4e4e0;
+    --ok:#1f6f4a; --warn:#9a5b12; --bad:#a3352b; --code:#f4f4f1; --accent:#1f6f4a;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #151614; --panel: #1c1e1b; --ink: #e9e9e4; --muted: #9a9a92;
-      --line: #2e312c; --accent: #6cc79a; --warn: #d9a441; --bad: #e0776a;
-      --code-bg: #131412;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #151614; --panel: #1c1e1b; --ink: #e9e9e4; --muted: #9a9a92;
-    --line: #2e312c; --accent: #6cc79a; --warn: #d9a441; --bad: #e0776a;
-    --code-bg: #131412;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 16px/1.65 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  main { max-width: 46rem; margin: 0 auto; padding: 4rem 16px 6rem; }
-  h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 1rem; }
-  h2 { font-size: 1.28rem; letter-spacing: -0.01em; margin: 3.2rem 0 0.9rem; }
-  h3 { font-size: 1rem; margin: 0 0 .5rem; }
-  p { margin: 0 0 1rem; }
-  .lede { font-size: 1.12rem; color: var(--muted); }
-  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86em; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem 1.25rem; margin: 1rem 0; }
-  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .93rem; }
-  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-weight: 600; color: var(--muted); font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
-  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem; overflow-x: auto; margin: 0; }
-  pre code { font-size: .82rem; line-height: 1.6; }
-  .step { counter-increment: step; }
-  .step h3::before { content: counter(step) ". "; color: var(--muted); }
-  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }
-  .note { color: var(--muted); font-size: .9rem; margin: .6rem 0 0; }
-  .trace { display: grid; grid-template-columns: auto 1fr; gap: .15rem .9rem; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; }
-  .chip { display: inline-block; padding: .05rem .45rem; border-radius: 5px; font-size: .74rem; font-weight: 600; white-space: nowrap; }
-  .ok { color: var(--accent); } .warn { color: var(--warn); } .bad { color: var(--bad); } .dim { color: var(--muted); }
-  .rule { border: 0; border-top: 1px solid var(--line); margin: 3rem 0 0; }
-  a { color: var(--accent); }
-  .caveat { border-left: 3px solid var(--warn); padding-left: 1rem; }
-  footer { margin-top: 3rem; color: var(--muted); font-size: .88rem; }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#151614; --panel:#1c1e1b; --ink:#e9e9e4; --muted:#9a9a92; --line:#2e312c;
+    --ok:#6cc79a; --warn:#d9a441; --bad:#e0776a; --code:#131412; --accent:#6cc79a;}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  main{max-width:47rem;margin:0 auto;padding:4rem 16px 6rem}
+  h1{font-size:clamp(1.8rem,4.6vw,2.5rem);line-height:1.15;letter-spacing:-.02em;margin:0 0 1rem}
+  h2{font-size:1.25rem;letter-spacing:-.01em;margin:3.2rem 0 .9rem}
+  p{margin:0 0 1rem}
+  .lede{font-size:1.1rem;color:var(--muted)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem;overflow-x:auto;margin:0 0 1rem}
+  pre code{font-size:.8rem;line-height:1.55}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.15rem 1.25rem;margin:1rem 0}
+  .muted{color:var(--muted)}
+  .small{font-size:.9rem}
+  a{color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:.92rem;margin:1rem 0}
+  th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+  /* demo */
+  .counter{display:flex;align-items:baseline;gap:.6rem;margin:0 0 1rem}
+  .counter b{font-size:2.6rem;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+  .controls{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+  button{font:inherit;font-size:.9rem;padding:.45rem .85rem;border-radius:8px;cursor:pointer;
+    border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+  button:hover{border-color:var(--muted)}
+  button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .steps{display:grid;grid-template-columns:auto 1fr;gap:.3rem .9rem;
+    font-family:ui-monospace,Menlo,monospace;font-size:.79rem;margin-top:.4rem}
+  .phase{color:var(--muted);text-align:right}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .dim{color:var(--muted)}
+  .outcome{margin-top:1rem;padding-top:.9rem;border-top:1px solid var(--line);font-size:.95rem}
+  footer{margin-top:3.5rem;color:var(--muted);font-size:.88rem}
+  .note{border-left:3px solid var(--warn);padding-left:1rem}
 </style>
 </head>
 <body>
 <main>
-  <h1>Two agents. One key. One payment disappears.</h1>
+  <h1>Lucid Agents settles on an HTTP&nbsp;response.<br>This settles it on chain.</h1>
+
   <p class="lede">
-    Both agents build a transaction. Both are assigned the same nonce, because neither
-    had landed when the other was built. One is dropped — or replaced, if the second
-    paid more gas. Both submitters saw success. Nothing reports the loss.
-  </p>
-  <p>
-    <strong>Nonce Firewall</strong> is an admission gate in front of KeeperHub that makes
-    that unrepresentable.
+    And it does it without generating a single new identifier — because Lucid already
+    enforces exactly the one we need.
   </p>
 
-  <h2>The failure, executed rather than asserted</h2>
   <p>
-    <code>test/nonce-collision.test.ts</code> runs it in an in-process EVM. Two well-formed
-    transfers from one key, each assigned nonce 0:
+    <a href="https://github.com/daydreamsai/lucid-agents">Lucid Agents</a> is Daydreams'
+    machine-commerce runtime: typed functions become paid x402 entrypoints. It admits a
+    payment when the facilitator says the credential is good. Its own types hand the next
+    step to somebody else —
   </p>
-  <pre><code>✓ drops one of two distinct transactions that share a nonce
-✓ lands both when the same two transactions are serialized
-✓ lets a higher-gas replacement evict an already-submitted transaction</code></pre>
-  <p class="note">
-    Alice is paid 1000. Bob's 2000 never happens. Neither transaction was malformed —
-    the second was merely built a moment too late.
+  <pre><code>preflightIncoming — Evaluate amount and endpoint policies
+  <strong>before another rail attempts an irreversible settlement.</strong></code></pre>
+  <p>This is that rail.</p>
+
+  <h2>The join</h2>
+  <p>
+    Lucid's <code>reconcilePaymentIdentifier</code> refuses any request where the x402
+    payment identifier does not <strong>equal</strong> the HTTP <code>Idempotency-Key</code>.
+    That identifier is passed straight through as KeeperHub's <code>idempotency_key</code>,
+    so one identity spans the whole path:
+  </p>
+  <div class="card">
+    <strong>The value a buyer retries with is the value that decides whether a transfer is
+    broadcast or replayed.</strong>
+    <p class="muted small" style="margin:.6rem 0 0">
+      Nothing is generated, correlated, or stored to make the retry safe. It falls out of an
+      invariant Lucid already enforces.
+    </p>
+  </div>
+
+  <h2>Try it</h2>
+  <p class="small muted">
+    This runs the real <code>LucidKeeperHubSettler</code> from the repository. Only the
+    transport is replaced with a stand-in that mirrors what the live API actually did —
+    the decisions on screen are the shipped code's decisions.
   </p>
 
-  <h2>Why KeeperHub's idempotency key doesn't cover this</h2>
-  <p>
-    It isn't supposed to. KeeperHub assigns a fresh nonce per attempt and deliberately
-    excludes it from the idempotency key, so a <em>retry of the same intent</em> replays
-    the first execution instead of paying twice. That's correct, and this project relies
-    on it.
-  </p>
-  <p>
-    The uncovered case is <em>distinct</em> intents submitted concurrently on one key. Two
-    different payments are two different intents, so they derive two different keys, so
-    nothing links them — and they still contend for one nonce. Idempotency is about
-    identity; this is about concurrency.
+  <div class="card">
+    <div class="counter">
+      <b id="count">0</b>
+      <span class="muted">transfers broadcast on chain</span>
+    </div>
+
+    <div class="controls">
+      <button class="primary" id="pay">Buyer pays</button>
+      <button id="retry" disabled>Buyer retries — same Idempotency-Key</button>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="controls">
+      <button id="revert">Preflight would revert</button>
+      <button id="unverified">Receipt unverified</button>
+      <button id="noid">No payment identifier</button>
+    </div>
+
+    <div class="steps" id="steps"></div>
+    <div class="outcome muted" id="outcome">Press <strong>Buyer pays</strong> to start.</div>
+  </div>
+
+  <p class="small muted">
+    The counter is the point. Press <em>Buyer retries</em> as many times as you like — it
+    stays at one. That is the behaviour a real x402 buyer produces, because Lucid requires
+    them to resend the same <code>Idempotency-Key</code>.
   </p>
 
-  <h2>Mechanism</h2>
-  <p>A <strong>lane</strong> is one sender key on one chain. All nonce contention lives inside a lane.</p>
+  <h2>Proof on chain</h2>
+  <p>A real settlement on Base Sepolia, keyed by a Lucid-format payment identifier:</p>
   <table>
-    <thead><tr><th>Rule</th><th>Failure it removes</th></tr></thead>
+    <tr><th>Payment identifier</th><td><code>pay_lucid0917settle01</code></td></tr>
+    <tr><th>Transaction</th><td><a href="https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359"><code>0x7d8d4849…36780359</code></a></td></tr>
+    <tr><th>Value moved</th><td>0.0000001 ETH → <code>0x…bEEF</code></td></tr>
+    <tr><th>Receipt</th><td><code>verified: true</code> · <code>receiptStatus: success</code> · block 46952279</td></tr>
+    <tr><th>Resent, same identifier</th><td><code>idempotentReplay: true</code>, same hash, <strong>no second transfer</strong></td></tr>
+  </table>
+
+  <h2>Why <code>verified</code>, not <code>confirmed</code></h2>
+  <p>
+    KeeperHub distinguishes an execution it believes succeeded from one whose receipt it has
+    reconciled against the chain. Fulfilling an entrypoint is irreversible, so the settler
+    requires the stronger signal. Four non-happy paths are refused rather than fulfilled:
+  </p>
+  <table>
+    <thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
     <tbody>
-      <tr><td>One intent in flight per lane</td><td>Two transactions assigned the same nonce</td></tr>
-      <tr><td>The lease is durable, not in-memory</td><td>A crash frees the lock; the restart broadcasts a second time</td></tr>
-      <tr><td>Order is priority, then intent hash — never arrival</td><td>Two schedulers admit different intents and both broadcast</td></tr>
-      <tr><td>Gas ceiling checked against the simulation</td><td>A runaway call drains the treasury's gas</td></tr>
-      <tr><td>Reverting simulation rejected pre-broadcast</td><td>Paying gas to learn what a dry run already knew</td></tr>
-      <tr><td>A submitter's stale intent yields to its own fresher one</td><td>A stale rebalance executing after its replacement</td></tr>
-      <tr><td>Supersession never crosses submitters</td><td>One agent cancelling another's queued work</td></tr>
-      <tr><td>A wedged execution quarantines its lane</td><td>Nonce gaps stacking behind a transaction that never lands</td></tr>
+      <tr><td>No payment identifier</td><td>Refused — nothing to bind a retry to</td></tr>
+      <tr><td>Preflight would revert</td><td>Never broadcast; Lucid refuses the invocation</td></tr>
+      <tr><td>Confirmed but <code>verified: false</code></td><td>Refused — not reconciled with the chain</td></tr>
+      <tr><td>Still pending after the poll budget</td><td>Reported <strong>pending</strong>, never failed</td></tr>
     </tbody>
   </table>
-  <p class="note">
-    Quarantine refuses new admissions but does <strong>not</strong> release the lease. A pending
-    transaction may still land on its nonce, so freeing the lane would admit a second intent
-    onto that same nonce — precisely the failure being prevented.
+  <p class="small muted">
+    That last row is deliberate. Telling Lucid a settlement failed while it may still land
+    invites a second settlement for the same payment — the exact failure the identifier
+    exists to prevent.
   </p>
 
-  <h2>Six agents, one key</h2>
-  <p class="note">A real run of the firewall, rendered at build time. Every decision below came from the code in the repository.</p>
-  <ol class="steps" id="steps"></ol>
-
-  <h2>Audit trail</h2>
-  <div class="card"><div class="trace" id="trace"></div></div>
-
-  <hr class="rule">
-  <h2>Status</h2>
-  <div class="caveat">
-    <p>
-      <strong>No mainnet or testnet transaction yet.</strong> KeeperHub is connected and the
-      dry run reaches the simulator, but the organization wallet
-      <code>0xE4a475d1…08311a8</code> holds 0.0 on both Base Sepolia and Ethereum Sepolia, so
-      nothing can be broadcast until it is funded.
-    </p>
-    <p>
-      The adapter is reconciled against the live <code>execute_contract_call</code> schema —
-      including three behaviours that reconstruction had got wrong. They're written up in
-      <code>docs/FRICTION.md</code>.
+  <h2 id="unfinished">What is unfinished</h2>
+  <div class="note">
+    <p class="small" style="margin:0">
+      Not merged upstream — this consumes Lucid's public seam and imports nothing private,
+      so it could become <code>@lucid-agents/keeperhub</code>, but that conversation has not
+      happened. Settlement is outbound only; collecting <em>into</em> a treasury is untouched.
+      No live Lucid service is wired to it — the settler is tested against a faithful fake of
+      Lucid's reconciliation output, not a running entrypoint. And the nonce firewall
+      underneath is unproven on KeeperHub's sponsored path.
     </p>
   </div>
 
   <footer>
-    76 tests · <a href="https://github.com/feedddosever/keepyourselfalive">source</a>
+    94 tests · <a href="https://github.com/feedddosever/keepyourselfalive">source</a> ·
+    <a href="https://github.com/feedddosever/keepyourselfalive/blob/claude/wizardly-darwin-ndhujg/docs/INTEGRATION.md">integration notes</a>
   </footer>
 </main>
 
+<script src="./demo.js"></script>
 <script>
-(async () => {
-  const fmt = (d) =>
-    d === "admitted" || d === "settled" ? "ok"
-    : d === "queued" ? "dim"
-    : d === "superseded" ? "warn"
-    : "bad";
+(() => {
+  const ID = "pay_lucid0917settle01";
+  const $ = (id) => document.getElementById(id);
+  let session = new window.LucidDemo.Session();
 
-  let data;
-  try {
-    data = await (await fetch("./scenario.json")).json();
-  } catch {
-    document.getElementById("steps").innerHTML =
-      '<li class="note">Scenario data unavailable. Run <code>npm run demo</code> locally.</li>';
-    return;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function render(result) {
+    $("steps").innerHTML = result.steps.map((s) =>
+      `<div class="phase">${esc(s.phase)}</div><div class="${s.tone}">${esc(s.detail)}</div>`).join("");
+    $("count").textContent = String(result.transfers);
+    $("count").className = result.transfers > 1 ? "bad" : "";
+    const link = result.txLink
+      ? ` <a href="${result.txLink}">view transaction</a>` : "";
+    $("outcome").innerHTML = `<span class="${result.tone}">${esc(result.outcome)}</span>${link}`;
   }
 
-  document.getElementById("steps").innerHTML = data.steps.map((step) => `
-    <li class="step card">
-      <h3>${step.title}</h3>
-      <pre><code>${step.lines.map(escape).join("\n")}</code></pre>
-      ${step.note ? `<p class="note">${escape(step.note)}</p>` : ""}
-    </li>`).join("");
-
-  document.getElementById("trace").innerHTML = data.audit.map((e) => `
-    <div class="mono dim">${escape(e.intentId)}</div>
-    <div><span class="chip ${fmt(e.decision)}">${escape(e.decision)}</span>
-      ${e.reason ? `<span class="dim"> ${escape(e.reason)}</span>` : ""}</div>`).join("");
-
-  function escape(s) {
-    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  async function run(options, enableRetry) {
+    const result = await session.run(options);
+    render(result);
+    if (enableRetry) $("retry").disabled = false;
   }
+
+  $("pay").onclick = () => run({ paymentIdentifier: ID }, true);
+  $("retry").onclick = () => run({ paymentIdentifier: ID }, true);
+  $("revert").onclick = () =>
+    run({ paymentIdentifier: ID, revertReason: "insufficient balance" }, false);
+  $("unverified").onclick = () => run({ paymentIdentifier: ID, verified: false }, false);
+  $("noid").onclick = () => run({}, false);
+  $("reset").onclick = () => {
+    session = new window.LucidDemo.Session();
+    $("steps").innerHTML = "";
+    $("count").textContent = "0";
+    $("count").className = "";
+    $("retry").disabled = true;
+    $("outcome").innerHTML = "Press <strong>Buyer pays</strong> to start.";
+  };
 })();
 </script>
 </body>
