@@ -120,14 +120,25 @@
   </p>
 
   <h2>Proof on chain</h2>
-  <p>A real settlement on Base Sepolia, keyed by a Lucid-format payment identifier:</p>
+  <p>
+    A real payment, settled by the running Lucid agent itself — an HTTP invoke of its
+    paid entrypoint, not a script:
+  </p>
   <table>
-    <tr><th>Payment identifier</th><td><code>pay_lucid0917settle01</code></td></tr>
-    <tr><th>Transaction</th><td><a href="https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359"><code>0x7d8d4849…36780359</code></a></td></tr>
+    <tr><th>Payment identifier</th><td><code>pay_verify1789726271604</code></td></tr>
+    <tr><th>Transaction</th><td><a href="https://sepolia.basescan.org/tx/0x549b61b1cd7727aea1bf9626d69d414dcc175d87baa8b1aaa202966227ac6a5e"><code>0x549b61b1…27ac6a5e</code></a></td></tr>
     <tr><th>Value moved</th><td>0.0000001 ETH → <code>0x…bEEF</code></td></tr>
-    <tr><th>Receipt</th><td><code>verified: true</code> · <code>receiptStatus: success</code> · block 46952279</td></tr>
-    <tr><th>Resent, same identifier</th><td><code>idempotentReplay: true</code>, same hash, <strong>no second transfer</strong></td></tr>
+    <tr><th>Block</th><td>46978993 on Base Sepolia</td></tr>
+    <tr><th>Resent, same identifier</th><td>same hash, <strong>no second transfer</strong></td></tr>
   </table>
+  <p class="small muted">
+    That retry never reached KeeperHub. Lucid keeps its own HTTP idempotency store and
+    replayed its recorded response first — two requests, one invoke in the server log.
+    KeeperHub's key is the layer underneath, for the retry that does get through: a crash
+    between the two, a second scheduler, a replayed queue entry. Lucid's store is
+    in-memory and per-process, so it is gone after a restart, and that is exactly when
+    KeeperHub's key still holds.
+  </p>
 
   <h2>Why <code>verified</code>, not <code>confirmed</code></h2>
   <p>

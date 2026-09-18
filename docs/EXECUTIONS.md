@@ -109,19 +109,26 @@ on an operator's machine, with `npm run verify:live`.
 
 | | |
 |---|---|
-| Payment identifier / idempotency key | `pay_verify1789725921326` |
-| Transaction | [`0x5305f18b…f7bc4ada`](https://sepolia.basescan.org/tx/0x5305f18b39f9be182f8316f93adf135f31a064ce2908fb56c946fb02f7bc4ada) |
+| Payment identifier / idempotency key | `pay_verify1789726271604` |
+| Transaction | [`0x549b61b1…27ac6a5e`](https://sepolia.basescan.org/tx/0x549b61b1cd7727aea1bf9626d69d414dcc175d87baa8b1aaa202966227ac6a5e) |
 | Value | 0.0000001 ETH → `0x000000000000000000000000000000000000bEEF` |
-| Block | 46978818 |
+| Block | 46978993 |
 
-All four checks:
+All four checks, on an operator machine with a real key and real network:
 
 ```
   ok   Lucid serves its agent card  name=summarizer
   ok   Lucid rejects a malformed Idempotency-Key  invalid_idempotency_key
-  ok   a valid key settles through KeeperHub  0x5305f18b…
+  ok   a valid key settles through KeeperHub  0x549b61b1…
   ok   the same key does not pay twice  same transaction, absorbed by Lucid's HTTP idempotency store
+
+all four checks passed. The integration works end to end.
 ```
+
+An earlier run of the same command settled
+[`0x5305f18b…f7bc4ada`](https://sepolia.basescan.org/tx/0x5305f18b39f9be182f8316f93adf135f31a064ce2908fb56c946fb02f7bc4ada)
+in block 46978818. Both are real; the run above is the one whose four checks
+all passed.
 
 The fourth line is the interesting one. The retry returned the same transaction
 hash, but KeeperHub never saw it: Lucid's own HTTP idempotency store replayed its
