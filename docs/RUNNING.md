@@ -42,6 +42,30 @@ Or download the installer from [nodejs.org](https://nodejs.org).
 Node 22 matters: this project reads your key from a `.env` file using a feature
 older versions do not have.
 
+### Windows: if npm is "blocked by execution policy"
+
+PowerShell refuses to run `.ps1` scripts by default, and npm ships as one:
+
+```
+npm : Невозможно загрузить файл C:\Program Files\nodejs\npm.ps1 ...
+npm : cannot be loaded because running scripts is disabled on this system ...
+```
+
+Node is installed correctly — PowerShell is just blocking the wrapper. Three ways
+out, least invasive first:
+
+1. **Use `npm.cmd` instead of `npm`.** The `.cmd` shim is not a PowerShell
+   script, so the policy does not apply: `npm.cmd install`, `npm.cmd test`,
+   `npm.cmd run verify:live`.
+2. **Use Command Prompt** (search "cmd") instead of PowerShell. Plain `npm`
+   works there.
+3. **Allow local scripts for your user**, then reopen PowerShell:
+   ```
+   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+   ```
+   This affects your account only, and still requires downloaded scripts to be
+   signed.
+
 ## 2. Get the code
 
 ```
@@ -132,6 +156,7 @@ bottom, and send it over. The common causes:
 | `insufficient_balance` | The org wallet ran out of Base Sepolia ETH; top it up |
 | `Host not in allowlist` | Your network blocks `app.keeperhub.com` — try another connection |
 | `node : ... not recognized` (Windows) | Node is not installed, or PowerShell was not reopened after installing |
+| `npm.ps1 ... running scripts is disabled` (Windows) | PowerShell execution policy — use `npm.cmd`, or see step 1 |
 
 ## Running the agent by itself
 
