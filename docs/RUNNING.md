@@ -4,14 +4,40 @@ Five steps. Nothing here needs prior terminal experience beyond copy-paste.
 
 ## 1. Install Node 22 or newer
 
-Check what you have — open Terminal (macOS) or PowerShell (Windows) and run:
+Check what you have:
 
 ```
 node --version
 ```
 
-If it prints `v22.` or higher, skip ahead. Otherwise install the LTS build from
-[nodejs.org](https://nodejs.org) and reopen the terminal.
+If it prints `v22.` or higher, skip ahead.
+
+**If it says the command is not recognised, Node is not installed.**
+
+### Windows
+
+In PowerShell:
+
+```
+winget install OpenJS.NodeJS.LTS
+winget install Git.Git
+```
+
+Then **close PowerShell and open a new window.** The installer adds Node to your
+PATH, but only new terminals pick that up — running `node --version` in the same
+window will still fail even after a successful install.
+
+No `winget`? Download the installers instead:
+[Node LTS](https://nodejs.org) and [Git for Windows](https://git-scm.com/download/win),
+then reopen PowerShell.
+
+### macOS
+
+```
+brew install node git
+```
+
+Or download the installer from [nodejs.org](https://nodejs.org).
 
 Node 22 matters: this project reads your key from a `.env` file using a feature
 older versions do not have.
@@ -44,11 +70,18 @@ with `kh_`. A `wfb_` key is for webhooks and will be rejected.
 
 Copy the example file and paste your key into it:
 
+macOS / Linux:
+
 ```
 cp .env.example .env
 ```
 
-On Windows PowerShell, use `copy .env.example .env` instead.
+Windows PowerShell:
+
+```
+copy .env.example .env
+notepad .env
+```
 
 Then open `.env` in any text editor and replace `kh_paste_your_key_here` with
 your real key, so the line reads:
@@ -98,6 +131,7 @@ bottom, and send it over. The common causes:
 | `401 Unauthorized` | The key is wrong, expired, or is a `wfb_` webhook key |
 | `insufficient_balance` | The org wallet ran out of Base Sepolia ETH; top it up |
 | `Host not in allowlist` | Your network blocks `app.keeperhub.com` — try another connection |
+| `node : ... not recognized` (Windows) | Node is not installed, or PowerShell was not reopened after installing |
 
 ## Running the agent by itself
 
@@ -108,6 +142,8 @@ npm run agent
 ```
 
 Then, in a second terminal:
+
+**macOS / Linux:**
 
 ```
 curl http://localhost:3000/.well-known/agent-card.json
@@ -121,6 +157,24 @@ curl -X POST http://localhost:3000/entrypoints/summarize/invoke \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: pay_lucid_demo_0001x' \
   -d '{"text":"KeeperHub settles what Lucid admits."}'
+```
+
+**Windows PowerShell** — `curl` there is an alias for a different command and the
+backslash line-continuations do not work, so use these instead:
+
+```
+irm http://localhost:3000/.well-known/agent-card.json
+
+irm http://localhost:3000/entrypoints/summarize/invoke -Method Post -ContentType 'application/json' -Headers @{'Idempotency-Key'='short'} -Body '{"text":"hi"}'
+
+irm http://localhost:3000/entrypoints/summarize/invoke -Method Post -ContentType 'application/json' -Headers @{'Idempotency-Key'='pay_lucid_demo_0001x'} -Body '{"text":"KeeperHub settles what Lucid admits."}'
+```
+
+PowerShell throws a red error on the deliberate failure rather than printing the
+body. To see Lucid's actual message, wrap it:
+
+```
+try { irm http://localhost:3000/entrypoints/summarize/invoke -Method Post -ContentType 'application/json' -Headers @{'Idempotency-Key'='short'} -Body '{"text":"hi"}' } catch { $_.ErrorDetails.Message }
 ```
 
 The second one should fail with `invalid_idempotency_key` — that is Lucid's own
