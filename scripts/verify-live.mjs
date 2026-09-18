@@ -34,10 +34,17 @@ function check(name, ok, detail) {
   console.log(`${ok ? "  ok  " : " FAIL "} ${name}${detail ? `  ${detail}` : ""}`);
 }
 
-const server = spawn("npx", ["tsx", "examples/lucid-agent/server.ts"], {
-  env: { ...process.env, PORT: String(PORT) },
-  stdio: ["ignore", "pipe", "pipe"],
-});
+// Spawn the running Node binary directly rather than `npx`. On Windows npx is
+// npx.cmd, and spawn() without a shell does not resolve .cmd shims, so this
+// fails with ENOENT there. process.execPath always exists and needs no shell.
+const server = spawn(
+  process.execPath,
+  ["--import", "tsx", "examples/lucid-agent/server.ts"],
+  {
+    env: { ...process.env, PORT: String(PORT) },
+    stdio: ["ignore", "pipe", "pipe"],
+  },
+);
 let serverLog = "";
 server.stdout.on("data", (d) => (serverLog += d));
 server.stderr.on("data", (d) => (serverLog += d));
