@@ -3,193 +3,221 @@
 **Lucid Agents settles on an HTTP response. This makes it settle on a verified
 onchain receipt — without generating a single new identifier.**
 
-[Lucid Agents](https://github.com/daydreamsai/lucid-agents) is Daydreams' machine
-commerce runtime: typed functions become paid x402 entrypoints. It admits a
-payment when the facilitator says the credential is good, and its own types hand
-the next step to somebody else — *"evaluate amount and endpoint policies before
-another rail attempts an irreversible settlement."*
-
-This is that rail.
-
-The join is an invariant Lucid already enforces: the x402 payment identifier must
-**equal** the HTTP `Idempotency-Key`. Pass it through as KeeperHub's
-`idempotency_key` and one identity spans the whole path — the value a buyer
-retries with is the value that decides whether a transfer is broadcast or
-replayed. A retrying buyer cannot be charged twice, and nothing had to be
-generated, correlated or stored to make that true.
-
-Proven on Base Sepolia: [`0x7d8d4849…36780359`](https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359)
-moved value under `pay_lucid0917settle01`, `verified: true`. Resent under the
-same identifier: `idempotentReplay: true`, same hash, no second transfer.
-
-**[docs/INTEGRATION.md](docs/INTEGRATION.md)** is the full account, including
-what is unfinished. **[docs/EXECUTIONS.md](docs/EXECUTIONS.md)** has every
-transaction. **[docs/DEMO.md](docs/DEMO.md)** is the demo script.
-
-```
-npm install
-npm test            # 94 tests, no credentials needed
-npm run demo        # the firewall walkthrough, no credentials needed
-
-cp .env.example .env    # then paste your kh_ key into it
-npm run agent           # a real Lucid agent that settles on chain
-npm run verify:live     # all four checks, end to end
-```
-
-Step-by-step setup, including what to do when a check fails, is in
-**[docs/RUNNING.md](docs/RUNNING.md)**.
-
-`verify:live` boots the agent and proves the whole path in one command: Lucid
-serves its card, Lucid rejects a malformed `Idempotency-Key` before the handler
-runs, a valid key settles through KeeperHub, and the same key replays instead of
-paying twice.
+[**Live demo →**](https://lucid-keeperhub-test11-17fe.vercel.app) ·
+[**Transaction →**](https://sepolia.basescan.org/tx/0x549b61b1cd7727aea1bf9626d69d414dcc175d87baa8b1aaa202966227ac6a5e)
 
 ---
 
-# The nonce firewall underneath
-
-Two agents share a treasury key. Both build a transaction. Both are assigned the
-same nonce, because neither had landed when the other was built. One transaction
-is dropped — or replaced, if the second paid more gas. Both agents saw a
-successful submission. One payment is simply gone, and nothing reports it.
-
-This is an admission gate in front of KeeperHub that makes that unrepresentable.
-
-## The failure, executed rather than asserted
-
-`test/nonce-collision.test.ts` runs it in an in-process EVM:
+[Lucid Agents](https://github.com/daydreamsai/lucid-agents) is Daydreams' machine
+commerce runtime: typed functions become paid x402 entrypoints. It admits a
+payment when the facilitator says the credential is good. Its own types hand the
+next step to somebody else:
 
 ```
-✓ drops one of two distinct transactions that share a nonce
-✓ lands both when the same two transactions are serialized
-✓ lets a higher-gas replacement evict an already-submitted transaction
+preflightIncoming — Evaluate amount and endpoint policies
+  before another rail attempts an irreversible settlement.
 ```
 
-Alice is paid 1000. Bob's 2000 never happens. Neither transaction was malformed;
-the second was merely built a moment too late.
+This is that rail.
 
-## Why KeeperHub's idempotency key does not cover this
+## The join
 
-It is not supposed to. KeeperHub assigns a fresh nonce on every attempt and
-deliberately excludes it from the idempotency key, so that *a retry of the same
-intent* reproduces the key and replays the first execution instead of paying
-twice. That is correct, and this project relies on it.
+Lucid already enforces the invariant this needs. `reconcilePaymentIdentifier`
+refuses any request where the x402 payment identifier does not **equal** the HTTP
+`Idempotency-Key`. Pass that identifier through as KeeperHub's `idempotency_key`
+and one identity spans the whole path:
 
-The uncovered case is *distinct* intents submitted concurrently on one key. Two
-different payments are two different intents, so they derive two different keys,
-so nothing links them — and they still contend for one nonce. Idempotency is
-about identity; this is about concurrency.
+> The value a buyer retries with is the value that decides whether a transfer is
+> broadcast or replayed.
 
-## Mechanism
+Nothing is generated, correlated or stored to make the retry safe. It falls out
+of a rule Lucid was already applying for its own reasons.
 
-A **lane** is one sender key on one chain. All nonce contention lives inside a lane.
+In return, Lucid gains the other direction: it can finalize against a receipt
+KeeperHub reconciled with the chain, rather than against an HTTP 200.
 
-| Rule | Failure it removes |
-|---|---|
-| At most one intent in flight per lane | Two transactions assigned the same nonce |
-| The lease is durable, not in-memory | A crash frees the lock, a restart broadcasts a second time |
-| Admission order is priority, then intent hash — never arrival | Two schedulers racing admit different intents and both broadcast |
-| Gas ceiling checked against the simulation | A runaway call burns the treasury's gas before anyone reads a receipt |
-| Reverting simulation rejected pre-broadcast | Paying gas to learn what a dry run already knew |
-| A submitter's stale intent is superseded by its own fresher one | A stale rebalance executing after the fresh one that replaced it |
-| Supersession never crosses submitters | One agent cancelling another's queued work by naming its resource |
-| A wedged execution quarantines its lane | Nonce gaps stacking behind a transaction that never lands |
+## Verify it yourself
 
-The last one is the subtle one: quarantine refuses new admissions but does **not**
-release the lease. A pending transaction may still land on its nonce, so freeing
-the lane would admit a second intent onto that same nonce — precisely the failure
-being prevented. Clearing it is an operator decision, recorded with a note.
-
-The intent hash doubles as the idempotency key passed to KeeperHub, so the two
-mechanisms compose: the firewall stops concurrent intents colliding, and the key
-stops a retried admission rebroadcasting.
-
-## Watch it
+Steps 1 and 2 need no credentials. Step 3 needs your own KeeperHub organization
+key and settles 0.0000001 test ETH from your own org wallet on Base Sepolia — a
+fraction of a cent, but it is your wallet, so it is worth saying.
 
 ```
+# 1. Get it. Needs Node 22+ and git.
+git clone https://github.com/feedddosever/keepyourselfalive
+cd keepyourselfalive
+git checkout claude/wizardly-darwin-ndhujg
 npm install
-npm test          # 82 tests
-npm run demo      # no API key needed
+
+# 2. No credentials needed.
+npm test          # 94 tests
+npm run demo      # the admission-control walkthrough, printed
+
+# 3. Real settlement, with your own kh_ key.
+cp .env.example .env      # paste your key into it, then:
+npm run verify:live
 ```
 
-## Execute for real
+Step 3 prints:
 
 ```
-KH_API_KEY=kh_…  SENDER_ADDRESS=0x…  npm run execute
+  ok   Lucid serves its agent card  name=summarizer
+  ok   Lucid rejects a malformed Idempotency-Key  invalid_idempotency_key
+  ok   a valid key settles through KeeperHub  0x…
+  ok   the same key does not pay twice  same transaction, absorbed by
+                                        Lucid's HTTP idempotency store
+
+  transaction  https://sepolia.basescan.org/tx/0x…
+
+all four checks passed. The integration works end to end.
 ```
 
-Submits `EXECUTE_COUNT` intents (default 2) at once against one sender key and
-drives them to completion through the live MCP adapter. Without the firewall they
-would be assigned the same nonce and all but one would be lost; with it they land
-as consecutive transactions on consecutive nonces, and the run prints an explorer
-link for each.
+Windows, step-by-step setup, and what each failure means:
+**[docs/RUNNING.md](docs/RUNNING.md)**.
 
-Defaults to `approve(spender, 0)` on Base Sepolia USDC: it moves no value and
-needs no token balance, so the wallet only needs dust for gas. Two approvals
-naming two different spenders are two genuinely distinct intents contending for
-one nonce, which is the whole demonstration — the action itself is incidental.
+## A running Lucid service, not a description of one
 
-`EXECUTE_MODE=deposit` switches to WETH `deposit()` if you would rather see value
-move. `CHAIN_ID`, `TARGET_ADDRESS`, `EXECUTE_VALUE`, `EXECUTE_COUNT`,
-`GAS_CEILING` and `LEDGER_PATH` override the rest.
+`examples/lucid-agent/server.ts` is a real Lucid agent on their published
+packages — `@lucid-agents/core`, `/http`, `/hono` — serving their agent card and
+their entrypoint.
 
-The demo puts six agents on one key and walks through every rule above:
+Two behaviours show the integration sits on Lucid's seam rather than beside it.
+Their HTTP extension rejects a malformed key **before the handler runs**:
 
 ```
-1. Six agents submit at once against one treasury key
-   drain admitted 1, broadcast count 1
-   without the lease, all six would be assigned the same nonce
-
-5. A gas ceiling is enforced before broadcast, not after
-   runaway → rejected-gas-ceiling (1200000 > ceiling 150000)
-   broadcast count 2 — the rejected intent never reached the chain
-
-6. A wedged transaction quarantines its lane instead of stacking nonces
-   new submission → rejected-quarantined
-   broadcast count 3 (was 3) — nothing queued behind the wedge
+$ curl -X POST …/entrypoints/summarize/invoke -H 'Idempotency-Key: short'
+{"error":{"code":"invalid_idempotency_key",
+          "message":"Idempotency-Key must contain 20 to 256 characters"}}
 ```
 
-It ends by printing the audit trail: every queue, admission, supersession,
-rejection and quarantine with its reason.
+That error is Lucid's. And the handler returns Lucid's own settlement record,
+putting the transaction hash where their types ask for a *"verified payment
+channel or session reference"*:
+
+```ts
+payment: { actualAmount: PRICE_ETH, asset: "ETH", reference: settlement.txHash }
+```
+
+## Two layers of exactly-once, and Lucid's fires first
+
+Running it end to end surfaced something the unit tests could not: a retried
+invocation never reaches KeeperHub. Lucid keeps its own HTTP idempotency store,
+enabled by default, and replays its recorded response — two requests, one
+`invoke` line in the server log.
+
+| Layer | Catches | Evidence |
+|---|---|---|
+| Lucid HTTP idempotency | A buyer retrying the same request | One invoke line for two requests |
+| KeeperHub idempotency key | A retry that *does* reach settlement — a crash between the two, a second scheduler, a replayed queue entry | `idempotentReplay: true`, same hash |
+
+Neither is redundant. Lucid's store is in-memory and per-process, so it is gone
+after a restart — which is exactly when KeeperHub's key still holds.
+
+## Why `verified`, not `confirmed`
+
+KeeperHub distinguishes an execution it believes succeeded from one whose receipt
+it reconciled against the chain. Fulfilling an entrypoint is irreversible, so the
+settler takes the stronger signal and refuses four non-happy paths rather than
+fulfilling:
+
+| Condition | Behaviour |
+|---|---|
+| No payment identifier | Refused — nothing to bind a retry to |
+| Preflight would revert | Never broadcast; Lucid refuses the invocation |
+| Confirmed but `verified: false` | Refused — not reconciled with the chain |
+| Still pending after the poll budget | Reported **pending**, never failed |
+
+The last row is deliberate. Telling Lucid a settlement failed while it may still
+land invites a second settlement for the same payment — the exact failure the
+identifier exists to prevent.
+
+## Proof
+
+| | |
+|---|---|
+| Payment identifier | `pay_verify1789726271604` |
+| Transaction | [`0x549b61b1…27ac6a5e`](https://sepolia.basescan.org/tx/0x549b61b1cd7727aea1bf9626d69d414dcc175d87baa8b1aaa202966227ac6a5e) |
+| Value | 0.0000001 ETH → `0x…bEEF`, block 46978993, Base Sepolia |
+| Resent, same identifier | same hash, no second transfer |
+
+Settled by the running Lucid agent via an HTTP invoke of its paid entrypoint —
+not by a script. Every execution, including the ones driven directly through the
+settler, is in **[docs/EXECUTIONS.md](docs/EXECUTIONS.md)**.
+
+## What is unfinished
+
+- **Not merged upstream.** This consumes Lucid's public seam and imports nothing
+  private, so it could become `@lucid-agents/keeperhub` — but that conversation
+  has not happened.
+- **Settlement is outbound only.** Collecting *into* a treasury is untouched.
+- **Inbound x402 admission is not wired.** The agent settles on invoke; it does
+  not yet verify an incoming x402 credential through Lucid's authorizer.
+- **The nonce firewall is unproven on KeeperHub's sponsored path.** Sponsored
+  sends are relayed, so the consecutive-nonce claim is not established for them.
+  `docs/EXECUTIONS.md` says so rather than implying otherwise.
 
 ## Layout
 
 ```
-src/firewall/intent.ts    intent identity, lane key, deterministic ordering
-src/firewall/store.ts     durable lane state — the lease outlives the process
-src/firewall/firewall.ts  submit / drain / poll state machine
-src/firewall/demo.ts      the six-agent walkthrough
-src/keeperhub.ts          the KeeperHub port
-src/adapters/             one implementation per official surface
+src/lucid/settlement.ts     the bridge: Lucid's identifier → KeeperHub's key
+src/lucid/types.ts          what Lucid hands over, and what it may finalize on
+src/adapters/mcp.ts         KeeperHub over MCP — simulate, idempotency, receipts
+src/adapters/rest.ts        @keeperhub/sdk, which exposes neither (see FRICTION)
+src/adapters/body.ts        byte-stable request body; a float breaks the binding
+examples/lucid-agent/       a real Lucid service wired to the settler
+src/firewall/               admission control for a shared sender key
+scripts/verify-live.mjs     the four checks above, in one command
 ```
 
-## First client
+## Documentation
 
-The repository also contains a netted settlement agent — it collapses many tip
-obligations into one batched payout, and is what the firewall was built for. It
-contributes the pieces the firewall reuses: the canonical-effect hash, the
-durable ledger with crash recovery, both KeeperHub adapters, and the EVM test
-harness. `src/netting.ts`, `src/settle.ts` and `contracts/TipDisperser.sol`.
-
-## Status
-
-| Piece | State |
+| | |
 |---|---|
-| Collision demonstration in a real EVM | Done, 3 tests |
-| Lane exclusivity, ordering, durability | Done, 18 tests |
-| Netting, idempotency, ledger, disperser | Done, 38 tests |
-| Live execution path (`npm run execute`) | Done — awaiting a funded wallet |
-| REST adapter (`@keeperhub/sdk`) | Done — degraded preflight, see `docs/FRICTION.md` |
-| MCP adapter (`@keeperhub/mcp`) | Done — reconciled against the live tool schema |
-| First Base Sepolia transaction | **Not done — needs a `kh_` key and a funded sender** |
+| [docs/INTEGRATION.md](docs/INTEGRATION.md) | The full account: the seam, the flow, what is unfinished |
+| [docs/EXECUTIONS.md](docs/EXECUTIONS.md) | Every transaction, and what each does *not* prove |
+| [docs/FRICTION.md](docs/FRICTION.md) | Where KeeperHub was hard to integrate against, with fixes |
+| [docs/RUNNING.md](docs/RUNNING.md) | Setup, Windows notes, failure-to-cause table |
+| [docs/DEMO.md](docs/DEMO.md) | The demo script |
 
-One standing caveat, and one open blocker. The caveat: `@keeperhub/sdk@0.1.1`
-exposes neither `simulate` nor an idempotency key, so the REST adapter
-substitutes a local `eth_call` preflight, reports `via: "local-eth-call"`, and
-sets `idempotencyEnforcedRemotely: false` rather than implying a guarantee it
-lacks. Prefer the MCP adapter. The blocker: the organization wallet
-`0xE4a475d134bB72ff8045eA4E4c762174408311a8` holds 0.0 on Base Sepolia and
-Ethereum Sepolia, so nothing can be broadcast until it is funded.
+---
 
-`docs/FRICTION.md` covers both, plus three behaviours that only surfaced once the
-live MCP schema was available.
+## The nonce firewall underneath
+
+Two agents share a treasury key. Both build a transaction. Both are assigned the
+same nonce, because neither had landed when the other was built. One is dropped —
+or replaced, if the second paid more gas. Both agents saw a successful
+submission. One payment is gone, and nothing reports it.
+
+`test/nonce-collision.test.ts` executes that in an in-process EVM rather than
+asserting it. Alice is paid 1000; Bob's 2000 never happens.
+
+This is **not** a gap in KeeperHub's idempotency key. That key deliberately
+excludes the nonce so a *retry of the same intent* replays instead of paying
+twice, and this project depends on it. The uncovered case is *distinct* intents
+submitted concurrently: two payments derive two keys, so nothing links them, and
+they still contend for one nonce. Idempotency is about identity; this is about
+concurrency.
+
+A **lane** is one sender key on one chain:
+
+| Rule | Failure it removes |
+|---|---|
+| One intent in flight per lane | Two transactions assigned the same nonce |
+| The lease is durable, not in-memory | A crash frees the lock; the restart broadcasts again |
+| Order is priority, then intent hash — never arrival | Two schedulers admit different intents and both broadcast |
+| Gas ceiling checked against the simulation | A runaway call drains the treasury's gas |
+| Reverting simulation rejected pre-broadcast | Paying gas to learn what a dry run already knew |
+| A submitter's stale intent yields to its own fresher one | A stale rebalance executing after its replacement |
+| Supersession never crosses submitters | One agent cancelling another's queued work |
+| A wedged execution quarantines its lane | Nonce gaps stacking behind a transaction that never lands |
+
+Quarantine refuses new admissions but does **not** release the lease: the wedged
+transaction may still land on its nonce, and freeing the lane would put a second
+one there. Clearing it is an operator decision, recorded with a note.
+
+```
+npm run demo      # six agents on one key, every rule above, no credentials
+```
+
+It ends by printing the audit trail — every queue, admission, supersession,
+rejection and quarantine, with its reason.
