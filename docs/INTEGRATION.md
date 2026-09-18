@@ -136,6 +136,32 @@ payment: { actualAmount: PRICE_ETH, asset: "ETH", reference: settlement.txHash }
 session reference"*. Putting the transaction hash there means Lucid's accounting
 ends up pointing at a receipt that was reconciled against the chain.
 
+## Two layers of exactly-once, and Lucid's fires first
+
+Running the agent end to end surfaced something the unit tests could not: a
+retried invocation never reaches KeeperHub at all.
+
+Lucid's HTTP extension keeps its own idempotency store — `claim` / `release` /
+`complete`, enabled by default via `createInMemoryHttpIdempotencyStore`. On the
+second request with the same `Idempotency-Key`, Lucid replays its recorded
+response and the handler does not run. The server log shows it plainly: two HTTP
+requests, one `[agent-kit:entrypoint] invoke` line.
+
+So the two mechanisms compose rather than overlap:
+
+| Layer | Catches | Evidence |
+|---|---|---|
+| Lucid HTTP idempotency | A buyer retrying the same request | One invoke line for two requests; identical response |
+| KeeperHub idempotency key | A retry that *does* reach settlement — a crash between the two, a second scheduler, a replayed queue entry | `idempotentReplay: true`, same hash (`docs/EXECUTIONS.md`) |
+
+The outer layer is the common case and the inner one is the safety net. Neither
+is redundant: Lucid's store is in-memory and per-process, so it is gone after a
+restart — and that is exactly when KeeperHub's key still holds.
+
+This is why `verify:live` asserts that the transaction hash is unchanged rather
+than that KeeperHub reported a replay. Requiring KeeperHub's flag would fail a
+correctly behaving system, because a healthy Lucid never lets the retry through.
+
 ## Proof
 
 A real settlement, on Base Sepolia, keyed by a Lucid-format payment identifier

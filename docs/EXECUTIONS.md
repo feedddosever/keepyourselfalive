@@ -98,3 +98,36 @@ Resent with the same identifier and an identical body:
 
 Same execution, same hash, no second transfer — which is what a retrying x402
 buyer produces, and the reason the payment identifier is used as the key.
+
+---
+
+## The end-to-end run: settled by the Lucid agent itself
+
+The settlements above were driven through the settler directly. This one was
+executed by the **running Lucid agent** — an HTTP invoke of its paid entrypoint,
+on an operator's machine, with `npm run verify:live`.
+
+| | |
+|---|---|
+| Payment identifier / idempotency key | `pay_verify1789725921326` |
+| Transaction | [`0x5305f18b…f7bc4ada`](https://sepolia.basescan.org/tx/0x5305f18b39f9be182f8316f93adf135f31a064ce2908fb56c946fb02f7bc4ada) |
+| Value | 0.0000001 ETH → `0x000000000000000000000000000000000000bEEF` |
+| Block | 46978818 |
+
+All four checks:
+
+```
+  ok   Lucid serves its agent card  name=summarizer
+  ok   Lucid rejects a malformed Idempotency-Key  invalid_idempotency_key
+  ok   a valid key settles through KeeperHub  0x5305f18b…
+  ok   the same key does not pay twice  same transaction, absorbed by Lucid's HTTP idempotency store
+```
+
+The fourth line is the interesting one. The retry returned the same transaction
+hash, but KeeperHub never saw it: Lucid's own HTTP idempotency store replayed its
+recorded response first. The server log proves it — two requests, one
+`[agent-kit:entrypoint] invoke`. See "Two layers of exactly-once" in
+`docs/INTEGRATION.md`.
+
+**This is the transaction to submit.** It is the one a judge can trace back to a
+Lucid entrypoint invocation rather than to a script.

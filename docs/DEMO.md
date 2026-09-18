@@ -110,8 +110,16 @@ Point at the `settlement` block in the response, and at `payment.reference` —
 Lucid's own settlement record, now carrying an onchain transaction hash. Their
 types call that field *"a verified payment channel or session reference."*
 
-Run the identical curl **again** with the same key. Same transaction hash,
-`replayed: true`, and nothing new on chain.
+Run the identical curl **again** with the same key. Same transaction hash, and
+nothing new on chain.
+
+**Worth saying, because it is the subtler point:** that retry never reached
+KeeperHub. Lucid keeps its own HTTP idempotency store and replayed its recorded
+response before the handler ran — two requests, one `invoke` line in the server
+log. KeeperHub's key is the layer underneath, for the retry that *does* get
+through: a crash between the two, a second scheduler, a replayed queue entry.
+Lucid's store is in-memory and per-process, so it is gone after a restart, and
+that is exactly when KeeperHub's key still holds.
 
 ---
 

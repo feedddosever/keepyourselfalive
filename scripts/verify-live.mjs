@@ -107,10 +107,17 @@ try {
   if (settlement?.txHash) {
     const second = await invoke(KEY, "KeeperHub settles what Lucid admits.");
     const replay = second.body?.settlement ?? second.body?.output?.settlement;
+    // The substantive property is that no second transfer happened, which the
+    // hash proves. WHICH layer absorbed the retry is informative, not a
+    // requirement: Lucid runs its own HTTP idempotency store, so it usually
+    // replays its recorded response before the handler runs and KeeperHub is
+    // never asked. Requiring KeeperHub's flag would fail a correct system.
+    const sameHash = replay?.txHash === settlement.txHash;
+    const absorbedBy = replay?.replayed === true ? "KeeperHub" : "Lucid's HTTP idempotency store";
     check(
-      "the same key replays instead of paying twice",
-      replay?.txHash === settlement.txHash && replay?.replayed === true,
-      `replayed=${replay?.replayed} sameHash=${replay?.txHash === settlement.txHash}`,
+      "the same key does not pay twice",
+      sameHash,
+      sameHash ? `same transaction, absorbed by ${absorbedBy}` : "a different transaction came back",
     );
 
     console.log(`\n  transaction  ${settlement.txLink ?? settlement.txHash}`);
