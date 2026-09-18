@@ -31,9 +31,13 @@ npm install
 npm test            # 94 tests, no credentials needed
 npm run demo        # the firewall walkthrough, no credentials needed
 
-KH_API_KEY=kh_… npm run agent         # a real Lucid agent that settles on chain
-KH_API_KEY=kh_… npm run verify:live   # all four checks, end to end
+cp .env.example .env    # then paste your kh_ key into it
+npm run agent           # a real Lucid agent that settles on chain
+npm run verify:live     # all four checks, end to end
 ```
+
+Step-by-step setup, including what to do when a check fails, is in
+**[docs/RUNNING.md](docs/RUNNING.md)**.
 
 `verify:live` boots the agent and proves the whole path in one command: Lucid
 serves its card, Lucid rejects a malformed `Idempotency-Key` before the handler

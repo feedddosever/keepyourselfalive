@@ -19,8 +19,8 @@
     "prerender": "esbuild src/web/demo.ts --bundle --format=iife --target=es2022 --minify --outfile=public/demo.js",
     "vercel-build": "npm run prerender",
     "execute": "tsx src/firewall/execute.ts",
-    "agent": "tsx examples/lucid-agent/server.ts",
-    "verify:live": "node scripts/verify-live.mjs"
+    "agent": "node --env-file-if-exists=.env --import tsx examples/lucid-agent/server.ts",
+    "verify:live": "node --env-file-if-exists=.env scripts/verify-live.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
