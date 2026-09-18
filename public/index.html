@@ -140,6 +140,73 @@
     KeeperHub's key still holds.
   </p>
 
+
+  <h2>Verify it yourself</h2>
+  <p class="small muted">
+    About three minutes. Steps 1 and 2 need no credentials. Step 3 needs your own
+    KeeperHub organization key, and settles 0.0000001 test ETH from your own org wallet
+    on Base Sepolia — a fraction of a cent, but it is your wallet, so it is worth saying.
+  </p>
+
+<pre><code># 1. Get it. Needs Node 22+ and git.
+git clone https://github.com/feedddosever/keepyourselfalive
+cd keepyourselfalive
+git checkout claude/wizardly-darwin-ndhujg
+npm install
+
+# 2. No credentials needed.
+npm test          # 94 tests
+npm run demo      # the admission-control walkthrough, printed
+
+# 3. Real settlement, with your own kh_ key.
+cp .env.example .env      # paste your key into it, then:
+npm run verify:live</code></pre>
+
+  <p class="small muted">Step 3 prints:</p>
+
+<pre><code>  ok   Lucid serves its agent card  name=summarizer
+  ok   Lucid rejects a malformed Idempotency-Key  invalid_idempotency_key
+  ok   a valid key settles through KeeperHub  0x&hellip;
+  ok   the same key does not pay twice  same transaction, absorbed by
+                                        Lucid's HTTP idempotency store
+
+  transaction  https://sepolia.basescan.org/tx/0x&hellip;
+
+all four checks passed. The integration works end to end.</code></pre>
+
+  <p class="small muted">
+    To watch it by hand instead, run the agent and drive it yourself. The second request
+    is the interesting one — the error comes from <strong>Lucid's</strong> runtime, before any
+    code in this repository executes:
+  </p>
+
+<pre><code>npm run agent
+
+# in a second terminal
+curl http://localhost:3000/.well-known/agent-card.json
+
+curl -X POST http://localhost:3000/entrypoints/summarize/invoke \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: short' \
+  -d '{"text":"hi"}'
+# {"error":{"code":"invalid_idempotency_key",
+#           "message":"Idempotency-Key must contain 20 to 256 characters"}}
+
+curl -X POST http://localhost:3000/entrypoints/summarize/invoke \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: pay_judge_run_000001' \
+  -d '{"text":"KeeperHub settles what Lucid admits."}'
+# settles, and returns the transaction hash
+
+# run that last command again, unchanged:
+# same transaction hash, nothing new on chain</code></pre>
+
+  <p class="small muted">
+    On Windows PowerShell, <code>curl</code> is an alias for a different command and the
+    line continuations do not work — <code>docs/RUNNING.md</code> has <code>irm</code>
+    equivalents, along with the execution-policy fix for <code>npm</code>.
+  </p>
+
   <h2>Why <code>verified</code>, not <code>confirmed</code></h2>
   <p>
     KeeperHub distinguishes an execution it believes succeeded from one whose receipt it has
