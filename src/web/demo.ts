@@ -77,22 +77,21 @@ class DemoKeeperHub implements KeeperHubClient {
     }
     this.log({
       phase: "receipt",
-      detail: "verified: true · receiptStatus: success · block 46952279",
+      detail: "verified: true · receiptStatus: success · block 46978993",
       tone: "ok",
     });
     return {
       state: "confirmed",
       txHash: TX_HASH,
       txLink: `https://sepolia.basescan.org/tx/${TX_HASH}`,
-      blockNumber: 46952279,
-      gasUsedWei: "364778139063",
+      blockNumber: 46978993,
       verified: true,
       receiptStatus: "success",
     };
   }
 }
 
-const TX_HASH = "0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359";
+const TX_HASH = "0x549b61b1cd7727aea1bf9626d69d414dcc175d87baa8b1aaa202966227ac6a5e";
 
 function short(value: string): string {
   return value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
@@ -175,9 +174,7 @@ export class Session {
   }
 }
 
-declare global {
-  interface Window {
-    LucidDemo: { Session: typeof Session };
-  }
-}
-window.LucidDemo = { Session };
+// Exposed on globalThis rather than `window` so this file typechecks under the
+// Node lib the rest of the project uses. In a browser they are the same object,
+// so the page still reads it as `window.LucidDemo`.
+(globalThis as Record<string, unknown>).LucidDemo = { Session };

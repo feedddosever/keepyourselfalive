@@ -11,7 +11,7 @@ npm test          # 94 green, gives you a clean slate on screen
 ```
 
 Have open: the [live page](https://lucid-keeperhub-test11-17fe.vercel.app),
-and [the transaction](https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359)
+and [the transaction](https://sepolia.basescan.org/tx/0x549b61b1cd7727aea1bf9626d69d414dcc175d87baa8b1aaa202966227ac6a5e)
 on BaseScan.
 
 ---
@@ -129,8 +129,8 @@ Open BaseScan. Point at the transaction, then at the two facts:
 
 | | |
 |---|---|
-| Payment identifier | `pay_lucid0917settle01` |
-| Receipt | `verified: true`, `receiptStatus: success`, block 46952279 |
+| Payment identifier | `pay_verify1789726271604` |
+| Receipt | `verified: true`, `receiptStatus: success`, block 46978993 |
 | Resent, same identifier | `idempotentReplay: true`, same hash, **no second transfer** |
 
 **The line that lands:** "The retry is the evidence, not the payment. Anyone can
@@ -178,16 +178,18 @@ become `@lucid-agents/keeperhub` — but that conversation hasn't happened. Say 
 plainly; it reads better than implying otherwise.
 
 **"What doesn't work?"**
-Settlement is outbound only; collecting into a treasury is untouched. No live
-Lucid service is wired to it — the settler is tested against a faithful fake of
-their reconciliation output. And the nonce firewall underneath is unproven on
-KeeperHub's sponsored path, which `docs/EXECUTIONS.md` says outright.
+Settlement is outbound only; collecting into a treasury is untouched. Inbound
+x402 admission is not wired — the agent settles on invoke, but does not yet
+verify an incoming x402 credential through Lucid's authorizer. And the nonce
+firewall underneath is unproven on KeeperHub's sponsored path, which
+`docs/EXECUTIONS.md` says outright.
 
 ---
 
 ## If the live page won't load
 
-It may be behind Vercel's Deployment Protection, which shows a login wall to
-anyone who isn't the project owner. Fix it at **Project → Settings → Deployment
-Protection → Vercel Authentication → Disabled**. Failing that, run
-`npm run demo`, or open `public/index.html` locally — same page, same bundle.
+The page is public and was verified as such, but if it ever stops loading, the
+usual cause is Vercel's Deployment Protection being re-enabled — fix it at
+**Project → Settings → Deployment Protection → Vercel Authentication →
+Disabled**. Failing that, `npm run prerender` then open `public/index.html`
+locally: same page, same bundle, no network needed.

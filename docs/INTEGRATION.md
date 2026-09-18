@@ -117,7 +117,7 @@ $ curl -X POST .../entrypoints/summarize/invoke -H 'Idempotency-Key: short'
 
 That error is Lucid's, not this project's. The settlement path is never reached.
 
-**A valid key reaches KeeperHub.** With `Idempotency-Key: pay_lucid0917settle01`
+**A valid key reaches KeeperHub.** With a well-formed `Idempotency-Key`
 the handler settles through `LucidKeeperHubSettler` and the call goes out to the
 MCP endpoint — in a sandbox without egress it fails there, and nowhere earlier:
 
@@ -164,15 +164,22 @@ correctly behaving system, because a healthy Lucid never lets the retry through.
 
 ## Proof
 
-A real settlement, on Base Sepolia, keyed by a Lucid-format payment identifier
-(`pay_lucid0917settle01`):
+A real payment, settled by the **running Lucid agent** via an HTTP invoke of its
+paid entrypoint — not by a script:
 
 | | |
 |---|---|
-| Transaction | [`0x7d8d4849…36780359`](https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359) |
+| Payment identifier | `pay_verify1789726271604` |
+| Transaction | [`0x549b61b1…27ac6a5e`](https://sepolia.basescan.org/tx/0x549b61b1cd7727aea1bf9626d69d414dcc175d87baa8b1aaa202966227ac6a5e) |
 | Value moved | 0.0000001 ETH to `0x…bEEF` |
-| Receipt | `verified: true`, `receiptStatus: success`, block 46952279 |
-| Retry under the same identifier | `idempotentReplay: true`, same hash, **no second transfer** |
+| Block | 46978993 on Base Sepolia |
+| Retry under the same identifier | same hash, **no second transfer** |
+
+An earlier settlement driven straight through the settler, keyed by
+`pay_lucid0917settle01`, is
+[`0x7d8d4849…36780359`](https://sepolia.basescan.org/tx/0x7d8d48492ff9994b4950762b4be91ce5d068f79f5ae531b1b516865a36780359) — that one
+returned `idempotentReplay: true` on retry, which is the KeeperHub layer doing the
+work rather than Lucid's. Both are in `docs/EXECUTIONS.md`.
 
 The retry is the load-bearing evidence: it is the behaviour a Lucid buyer
 actually produces, and it moved no additional value.
